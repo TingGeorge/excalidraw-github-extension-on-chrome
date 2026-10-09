@@ -2,10 +2,22 @@
  * File ("blob") pages: add Preview / Inline buttons next to GitHub's
  * Raw · Copy · Download buttons, and render the inline preview.
  */
-import { detectKind, fileNameOf, hasEmbeddedScene, isBinaryKind, needsSniff, type FileKind } from "../shared/files";
+import {
+  detectKind,
+  fileNameOf,
+  hasEmbeddedScene,
+  isBinaryKind,
+  needsSniff,
+  type FileKind,
+} from "../shared/files";
 import { rawUrlFromBlobUrl, type BlobUrl } from "../shared/github";
 import { t } from "../shared/i18n";
-import { sendToBackground, type FetchResult, type ViewPayload } from "../shared/protocol";
+import {
+  sendToBackground,
+  type EmbedScrollMessage,
+  type FetchResult,
+  type ViewPayload,
+} from "../shared/protocol";
 import { INLINE_HEIGHT_MAX, INLINE_HEIGHT_MIN, saveSettings, type Settings } from "../shared/settings";
 import { extensionOrigin, h, icon, ICONS, MARK } from "./dom";
 import { fetchContent } from "./fetch";
@@ -79,7 +91,8 @@ function loadContent(s: BlobState): Promise<FetchResult> {
     const result = url ? await fetchContent(url, binary) : null;
     if (result?.ok) return result;
     const embedded = binary ? null : embeddedRawLines(s.page);
-    if (embedded !== null) return { ok: true, content: { encoding: "text", data: embedded }, finalUrl: location.href } as const;
+    if (embedded !== null)
+      return { ok: true, content: { encoding: "text", data: embedded }, finalUrl: location.href } as const;
     return result ?? ({ ok: false, status: 0, error: "No raw URL for this file" } as const);
   })();
   // Allow a retry after a failure.
@@ -89,7 +102,11 @@ function loadContent(s: BlobState): Promise<FetchResult> {
   return s.content;
 }
 
-function buildPayload(s: BlobState, result: Extract<FetchResult, { ok: true }>, settings: Settings): ViewPayload {
+function buildPayload(
+  s: BlobState,
+  result: Extract<FetchResult, { ok: true }>,
+  settings: Settings,
+): ViewPayload {
   return {
     mode: "view",
     source: {
@@ -129,7 +146,12 @@ function buildActions(s: BlobState, settings: Settings): HTMLElement {
   const preview = button(t("preview"), t("previewTitle"), ICONS.external, "preview");
   const inline = button(t("inline"), t("inlineTitle"), ICONS.eye, "inline");
   inline.setAttribute("aria-pressed", String(s.inlineOpen));
-  const group = h("div", { class: "xgp-actions", [MARK]: "actions", "data-xgp-href": s.href }, preview, inline);
+  const group = h(
+    "div",
+    { class: "xgp-actions", [MARK]: "actions", "data-xgp-href": s.href },
+    preview,
+    inline,
+  );
 
   const prefetch = () => void loadContent(s);
   group.addEventListener("pointerenter", prefetch, { once: true });
@@ -278,7 +300,7 @@ function makeResizable(container: HTMLElement, handle: HTMLElement) {
 /** Scroll requests from the embedded viewer (wheel events while it is not focused). */
 export function handleEmbedMessage(e: MessageEvent) {
   if (e.origin !== extensionOrigin()) return;
-  const data = e.data as { source?: string; type?: string; dx?: number; dy?: number } | null;
+  const data = e.data as Partial<EmbedScrollMessage> | null;
   if (data?.source !== "xgp-viewer" || data.type !== "scroll") return;
   window.scrollBy({ left: Number(data.dx) || 0, top: Number(data.dy) || 0, behavior: "instant" });
 }

@@ -1,14 +1,15 @@
 // Builds the extension into dist/.
 //   node scripts/build.mjs           production build
 //   node scripts/build.mjs --watch   rebuild on change (reload the extension in chrome://extensions)
+// XGP_OUT_DIR=<dir> builds somewhere other than dist/.
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
 import { build as viteBuild } from "vite";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const dist = join(root, "dist");
+const dist = resolve(root, process.env.XGP_OUT_DIR ?? "dist");
 const watch = process.argv.includes("--watch");
 
 await rm(dist, { recursive: true, force: true });
@@ -50,7 +51,7 @@ await viteBuild({
   configFile: join(root, "vite.config.ts"),
   mode: watch ? "development" : "production",
   logLevel: "warn",
-  build: watch ? { watch: {}, minify: false } : {},
+  build: { outDir: dist, ...(watch ? { watch: {}, minify: false } : {}) },
 });
 
-if (!watch) console.log(`\nBuilt extension ${pkg.version} into dist/`);
+if (!watch) console.log(`\nBuilt extension ${pkg.version} into ${dist}`);

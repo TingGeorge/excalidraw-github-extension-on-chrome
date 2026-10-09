@@ -67,7 +67,12 @@ async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSend
 }
 
 chrome.runtime.onMessage.addListener((msg: BackgroundRequest, sender, sendResponse) => {
-  if (sender.id !== chrome.runtime.id || !msg || typeof msg.type !== "string" || !msg.type.startsWith("xgp:")) {
+  if (
+    sender.id !== chrome.runtime.id ||
+    !msg ||
+    typeof msg.type !== "string" ||
+    !msg.type.startsWith("xgp:")
+  ) {
     return false;
   }
   handle(msg, sender).then(sendResponse, (err: unknown) =>

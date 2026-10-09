@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { EmbedScrollMessage } from "../shared/protocol";
 
 /**
  * Inline previews live in an iframe on github.com. Until the user clicks the
@@ -23,10 +24,13 @@ export function useEmbedInteraction(embed: boolean): boolean {
       e.stopImmediatePropagation();
       e.preventDefault();
       const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
-      window.parent.postMessage(
-        { source: "xgp-viewer", type: "scroll", dx: e.deltaX * scale, dy: e.deltaY * scale },
-        "*",
-      );
+      const message: EmbedScrollMessage = {
+        source: "xgp-viewer",
+        type: "scroll",
+        dx: e.deltaX * scale,
+        dy: e.deltaY * scale,
+      };
+      window.parent.postMessage(message, "*");
     };
     window.addEventListener("pointerdown", onPointerDown, true);
     window.addEventListener("blur", onBlur);

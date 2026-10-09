@@ -24,7 +24,6 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
-    setState({ status: "loading" });
     resolvePayload(params).then(
       (payload) => {
         if (cancelled) return;
@@ -32,7 +31,8 @@ export function App() {
         setState(payload ? { status: "ready", payload } : { status: "pick" });
       },
       (err: unknown) => {
-        if (!cancelled) setState({ status: "error", message: err instanceof Error ? err.message : String(err) });
+        if (!cancelled)
+          setState({ status: "error", message: err instanceof Error ? err.message : String(err) });
       },
     );
     return () => {
@@ -65,7 +65,15 @@ export function App() {
             <AlertIcon size={24} />
             <h1>{t("errorTitle")}</h1>
             <p>{state.message}</p>
-            {(params.id || params.url) && <Button label={t("retry")} onClick={() => setAttempt((a) => a + 1)} />}
+            {(params.id || params.url) && (
+              <Button
+                label={t("retry")}
+                onClick={() => {
+                  setState({ status: "loading" });
+                  setAttempt((a) => a + 1);
+                }}
+              />
+            )}
           </div>
         </div>
       );

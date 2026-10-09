@@ -25,4 +25,3 @@ export function extractObsidianScene(markdown: string): string {
   }
   return decompressed;
 }
-

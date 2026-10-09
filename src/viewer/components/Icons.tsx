@@ -27,8 +27,21 @@ export const LogoIcon = ({ size = 20 }: { size?: number }) => (
     <rect x="1" y="1" width="30" height="30" rx="7" fill="#6965db" />
     <rect x="6" y="8" width="9" height="7" rx="1.5" fill="none" stroke="#fff" strokeWidth="2" />
     <rect x="17" y="17" width="9" height="7" rx="1.5" fill="none" stroke="#fff" strokeWidth="2" />
-    <path d="M10.5 15.5 C 10.5 20, 13 20.5, 16 20.5" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-    <path d="M14 18.3 L16.5 20.5 L14 22.7" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <path
+      d="M10.5 15.5 C 10.5 20, 13 20.5, 16 20.5"
+      fill="none"
+      stroke="#fff"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    <path
+      d="M14 18.3 L16.5 20.5 L14 22.7"
+      fill="none"
+      stroke="#fff"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 

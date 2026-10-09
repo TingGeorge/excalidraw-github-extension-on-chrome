@@ -1,9 +1,9 @@
-node_modules/
 dist/
 release/
+node_modules/
 test-results/
 playwright-report/
-*.tsbuildinfo
-.DS_Store
+package-lock.json
+samples/
+test/fixtures/
 .build-*/
-test-results-*/

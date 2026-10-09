@@ -31,10 +31,20 @@ function flashSaved(status: HTMLElement) {
   statusTimer = setTimeout(() => status.classList.remove("is-visible"), 1200);
 }
 
-function checkbox(key: "autoInline" | "sniffImages" | "diffButtons", label: MessageKey, settings: Settings, onSave: () => void) {
+function checkbox(
+  key: "autoInline" | "sniffImages" | "diffButtons",
+  label: MessageKey,
+  settings: Settings,
+  onSave: () => void,
+) {
   const input = el("input", { type: "checkbox", checked: settings[key], id: `opt-${key}` });
   input.addEventListener("change", () => void saveSettings({ [key]: input.checked }).then(onSave));
-  return el("label", { className: "opt-row opt-row--check", htmlFor: input.id }, input, el("span", {}, t(label)));
+  return el(
+    "label",
+    { className: "opt-row opt-row--check", htmlFor: input.id },
+    input,
+    el("span", {}, t(label)),
+  );
 }
 
 function radios<K extends "theme">(
@@ -80,7 +90,10 @@ async function render() {
   const heightValue = el("output", {}, `${settings.inlineHeight}px`);
   heightValue.htmlFor.add(heightInput.id);
   heightInput.addEventListener("input", () => (heightValue.textContent = `${heightInput.value}px`));
-  heightInput.addEventListener("change", () => void saveSettings({ inlineHeight: Number(heightInput.value) }).then(onSave));
+  heightInput.addEventListener(
+    "change",
+    () => void saveSettings({ inlineHeight: Number(heightInput.value) }).then(onSave),
+  );
 
   const header = el(
     "header",

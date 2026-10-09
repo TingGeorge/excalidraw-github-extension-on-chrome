@@ -63,7 +63,10 @@ export function visualSignature(el: ElementLike): string {
   return stableStringify(copy);
 }
 
-export function describeElement(el: ElementLike & { text?: unknown }, all?: Map<string, ElementLike>): string {
+export function describeElement(
+  el: ElementLike & { text?: unknown },
+  all?: Map<string, ElementLike>,
+): string {
   let text = typeof el.text === "string" ? el.text : "";
   if (!text && all) {
     // Containers show the text of their bound label.

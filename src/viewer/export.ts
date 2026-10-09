@@ -5,7 +5,10 @@ import type { Theme } from "../shared/protocol";
 const PADDING = 20;
 
 function baseName(fileName: string): string {
-  return fileName.replace(/\.excalidraw(\.(json|svg|png|md))?$|\.excalidrawlib$|\.(svg|png|json)$/i, "") || "diagram";
+  return (
+    fileName.replace(/\.excalidraw(\.(json|svg|png|md))?$|\.excalidrawlib$|\.(svg|png|json)$/i, "") ||
+    "diagram"
+  );
 }
 
 function snapshot(api: ExcalidrawImperativeAPI) {
@@ -35,7 +38,14 @@ export async function pngBlob(api: ExcalidrawImperativeAPI, theme: Theme): Promi
     files,
     mimeType: "image/png",
     exportPadding: PADDING,
-    appState: { ...appState, exportBackground: true, exportWithDarkMode: theme === "dark", exportScale: 2 },
+    // Embedding the scene keeps the image editable in Excalidraw (and previewable by this extension).
+    appState: {
+      ...appState,
+      exportBackground: true,
+      exportWithDarkMode: theme === "dark",
+      exportScale: 2,
+      exportEmbedScene: true,
+    },
     getDimensions: (width: number, height: number) => ({ width: width * 2, height: height * 2, scale: 2 }),
   });
 }
@@ -50,7 +60,12 @@ export async function exportSvg(api: ExcalidrawImperativeAPI, fileName: string, 
     elements,
     files,
     exportPadding: PADDING,
-    appState: { ...appState, exportBackground: true, exportWithDarkMode: theme === "dark" },
+    appState: {
+      ...appState,
+      exportBackground: true,
+      exportWithDarkMode: theme === "dark",
+      exportEmbedScene: true,
+    },
   });
   const xml = new XMLSerializer().serializeToString(svg);
   download(new Blob([xml], { type: "image/svg+xml" }), `${baseName(fileName)}.svg`);

@@ -1,9 +1,10 @@
 import { chromium, test as base, type BrowserContext, type Page, type Route } from "@playwright/test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 export const ROOT = join(import.meta.dirname, "../..");
-export const DIST = join(ROOT, "dist");
+/** Built extension; XGP_DIST points the tests at another build. */
+export const DIST = resolve(ROOT, process.env.XGP_DIST ?? "dist");
 export const FIXTURES = join(ROOT, "test/fixtures");
 
 export function fixture(...parts: string[]): string {
@@ -31,8 +32,9 @@ export const test = base.extend<Fixtures>({
       args: [`--disable-extensions-except=${DIST}`, `--load-extension=${DIST}`],
     });
     // Never talk to the real GitHub from tests; unrouted requests fail fast.
-    await context.route(/^https:\/\/(github\.com|[a-z.]*githubusercontent\.com|github\.githubassets\.com)\//, (route) =>
-      route.abort("blockedbyclient"),
+    await context.route(
+      /^https:\/\/(github\.com|[a-z.]*githubusercontent\.com|github\.githubassets\.com)\//,
+      (route) => route.abort("blockedbyclient"),
     );
     await use(context);
     await context.close();

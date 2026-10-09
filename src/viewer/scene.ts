@@ -1,10 +1,5 @@
 /** Turn downloaded file content into something Excalidraw can render. */
-import {
-  loadFromBlob,
-  loadLibraryFromBlob,
-  restore,
-  restoreLibraryItems,
-} from "@excalidraw/excalidraw";
+import { loadFromBlob, loadLibraryFromBlob, restore, restoreLibraryItems } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { AppState, BinaryFiles, LibraryItem } from "@excalidraw/excalidraw/types";
 import { base64ToBytes, type FileKind, mimeForKind } from "../shared/files";
@@ -30,9 +25,7 @@ function contentToBlob(kind: FileKind, content: FileContent): Blob {
 }
 
 function contentToText(content: FileContent): string {
-  return content.encoding === "text"
-    ? content.data
-    : new TextDecoder().decode(base64ToBytes(content.data));
+  return content.encoding === "text" ? content.data : new TextDecoder().decode(base64ToBytes(content.data));
 }
 
 function restoreSceneJson(text: string): LoadedScene {
@@ -134,7 +127,9 @@ function remapElement(el: ExcalidrawElement, prefix: string, dx: number, dy: num
   const any = el as unknown as Record<string, unknown>;
   const remap = (id: unknown) => (typeof id === "string" ? prefix + id : id);
   const binding = (b: unknown) =>
-    b && typeof b === "object" ? { ...(b as object), elementId: remap((b as { elementId: string }).elementId) } : b;
+    b && typeof b === "object"
+      ? { ...(b as object), elementId: remap((b as { elementId: string }).elementId) }
+      : b;
   return {
     ...any,
     id: prefix + el.id,

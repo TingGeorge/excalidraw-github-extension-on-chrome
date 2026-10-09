@@ -146,7 +146,13 @@ export function DiffViewer({
 
   const title = (
     <div className="xv-title">
-      <a className="xv-title__name" href={payload.pageUrl} target="_blank" rel="noreferrer" title={payload.path}>
+      <a
+        className="xv-title__name"
+        href={payload.pageUrl}
+        target="_blank"
+        rel="noreferrer"
+        title={payload.path}
+      >
         {payload.path.split("/").pop()}
       </a>
       <span className="xv-title__context">
@@ -289,7 +295,9 @@ export function DiffViewer({
                           aria-hidden="true"
                         />
                         <span className="xv-changes__label">{change.label}</span>
-                        <span className={`xv-changes__kind xv-changes__kind--${change.kind}`}>{t(change.kind)}</span>
+                        <span className={`xv-changes__kind xv-changes__kind--${change.kind}`}>
+                          {t(change.kind)}
+                        </span>
                       </button>
                     </li>
                   ))}

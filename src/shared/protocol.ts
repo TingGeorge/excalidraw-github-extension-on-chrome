@@ -53,8 +53,7 @@ export interface DiffPayload {
 export type Payload = ViewPayload | DiffPayload;
 
 export type FetchResult =
-  | { ok: true; content: FileContent; finalUrl: string }
-  | { ok: false; status: number; error: string };
+  { ok: true; content: FileContent; finalUrl: string } | { ok: false; status: number; error: string };
 
 /** Messages handled by the background service worker. */
 export type BackgroundRequest =
@@ -81,6 +80,9 @@ export async function sendToBackground<T extends BackgroundRequest>(
 }
 
 /** Messages the embedded (inline) viewer sends to its parent page. */
-export type EmbedMessage =
-  | { source: "xgp-viewer"; type: "resize"; height: number }
-  | { source: "xgp-viewer"; type: "close" };
+export interface EmbedScrollMessage {
+  source: "xgp-viewer";
+  type: "scroll";
+  dx: number;
+  dy: number;
+}

@@ -6,7 +6,11 @@ import { LogoIcon } from "./Icons";
 /** File name plus `owner/repo · ref · directory` context. */
 export function SourceTitle({ source, extra }: { source: SourceInfo; extra?: ReactNode }) {
   const dir = source.path.includes("/") ? source.path.slice(0, source.path.lastIndexOf("/")) : "";
-  const context = [source.repo, source.ref ? shortSha(source.ref) : null, source.ref ? dirWithoutRef(dir, source.ref) : dir]
+  const context = [
+    source.repo,
+    source.ref ? shortSha(source.ref) : null,
+    source.ref ? dirWithoutRef(dir, source.ref) : dir,
+  ]
     .filter(Boolean)
     .join(" · ");
   const name = source.htmlUrl ? (

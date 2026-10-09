@@ -1,9 +1,4 @@
-import {
-  CaptureUpdateAction,
-  Excalidraw,
-  getSceneVersion,
-  MainMenu,
-} from "@excalidraw/excalidraw";
+import { CaptureUpdateAction, Excalidraw, getSceneVersion, MainMenu } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { excalidrawLangCode, t } from "../shared/i18n";
@@ -53,8 +48,6 @@ export function SceneViewer({
 
   useEffect(() => {
     let cancelled = false;
-    setScene(null);
-    setError(null);
     loadScene(source.kind, payload.content).then(
       (s) => {
         if (cancelled) return;
@@ -149,9 +142,7 @@ export function SceneViewer({
 
   const actions = (
     <>
-      {editing && dirty && (
-        <Button variant="invisible" label={t("discardEdits")} onClick={discardEdits} />
-      )}
+      {editing && dirty && <Button variant="invisible" label={t("discardEdits")} onClick={discardEdits} />}
       {!embed && (
         <Button
           icon={editing ? <CheckIcon /> : <PencilIcon />}
@@ -172,15 +163,15 @@ export function SceneViewer({
       {exportItems.length > 0 && <Menu label={t("export")} icon={<DownloadIcon />} items={exportItems} />}
       {themeToggle}
       {embed ? (
-        <Button
-          showLabel={false}
-          icon={<ExternalIcon />}
-          label={t("openInNewTab")}
-          onClick={openInTab}
-        />
+        <Button showLabel={false} icon={<ExternalIcon />} label={t("openInNewTab")} onClick={openInTab} />
       ) : (
         source.htmlUrl && (
-          <a className="xv-btn xv-btn--invisible xv-btn--icon" href={source.htmlUrl} title={t("openOnGitHub")} aria-label={t("openOnGitHub")}>
+          <a
+            className="xv-btn xv-btn--invisible xv-btn--icon"
+            href={source.htmlUrl}
+            title={t("openOnGitHub")}
+            aria-label={t("openOnGitHub")}
+          >
             <ExternalIcon />
           </a>
         )

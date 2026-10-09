@@ -40,8 +40,7 @@ const base = (id, type, x, y, width, height, extra = {}) => ({
   ...extra,
 });
 
-const textWidth = (text, fontSize) =>
-  Math.max(...text.split("\n").map((l) => l.length)) * fontSize * 0.55;
+const textWidth = (text, fontSize) => Math.max(...text.split("\n").map((l) => l.length)) * fontSize * 0.55;
 
 const label = (id, container, text, fontSize = 20) => {
   const lines = text.split("\n").length;
@@ -130,7 +129,15 @@ const version = Number(process.env.SAMPLE_VERSION ?? 2);
   const a2 = arrow("a2", cs, viewer);
   const elements = [gh, ghT, cs, csT, viewer, viewerT, a1, a2];
   if (version >= 2) {
-    const [inline, inlineT] = box("inline", 320, 200, 220, 100, "Inline preview\n(on GitHub page)", "#d0bfff");
+    const [inline, inlineT] = box(
+      "inline",
+      320,
+      200,
+      220,
+      100,
+      "Inline preview\n(on GitHub page)",
+      "#d0bfff",
+    );
     const [diff, diffT] = box("diff", 640, 200, 220, 100, "PR diff\n(side by side)", "#ffc9c9");
     const a3 = arrow("a3", inline, diff);
     // Vertical arrow content -> inline

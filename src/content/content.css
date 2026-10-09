@@ -191,3 +191,11 @@
     animation: none;
   }
 }
+
+/* "Preview diff" in diff file headers ------------------------------------- */
+
+.xgp-btn--diff {
+  height: 26px;
+  margin: 0 4px;
+  flex: none;
+}

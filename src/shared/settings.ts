@@ -33,9 +33,7 @@ export function normalizeSettings(raw: unknown): Settings {
   if (typeof r.diffButtons === "boolean") s.diffButtons = r.diffButtons;
   if (r.theme === "auto" || r.theme === "light" || r.theme === "dark") s.theme = r.theme;
   if (typeof r.inlineHeight === "number" && Number.isFinite(r.inlineHeight)) {
-    s.inlineHeight = Math.round(
-      Math.min(INLINE_HEIGHT_MAX, Math.max(INLINE_HEIGHT_MIN, r.inlineHeight)),
-    );
+    s.inlineHeight = Math.round(Math.min(INLINE_HEIGHT_MAX, Math.max(INLINE_HEIGHT_MIN, r.inlineHeight)));
   }
   return s;
 }

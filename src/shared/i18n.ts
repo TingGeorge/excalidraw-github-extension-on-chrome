@@ -40,7 +40,8 @@ const en = {
   expired: "This preview has expired. Reopen it from GitHub.",
   emptyScene: "This drawing is empty.",
   dropTitle: "Preview an Excalidraw file",
-  dropHint: "Drop a .excalidraw, .excalidraw.svg, .excalidraw.png, .excalidraw.md or .excalidrawlib file here",
+  dropHint:
+    "Drop a .excalidraw, .excalidraw.svg, .excalidraw.png, .excalidraw.md or .excalidrawlib file here",
   chooseFile: "Choose file…",
   unsupportedFile: "This file type is not supported.",
   libraryItems: "{n} library items",
@@ -115,7 +116,8 @@ const zhTW: Record<MessageKey, string> = {
   expired: "這個預覽已過期，請從 GitHub 重新開啟。",
   emptyScene: "這張圖是空的。",
   dropTitle: "預覽 Excalidraw 檔案",
-  dropHint: "把 .excalidraw、.excalidraw.svg、.excalidraw.png、.excalidraw.md 或 .excalidrawlib 檔案拖曳到這裡",
+  dropHint:
+    "把 .excalidraw、.excalidraw.svg、.excalidraw.png、.excalidraw.md 或 .excalidrawlib 檔案拖曳到這裡",
   chooseFile: "選擇檔案…",
   unsupportedFile: "不支援這種檔案類型。",
   libraryItems: "{n} 個元件庫項目",
@@ -154,14 +156,19 @@ const zhTW: Record<MessageKey, string> = {
 function pickLocale(languages: readonly string[]): "en" | "zh-TW" {
   for (const raw of languages) {
     const lang = raw.toLowerCase();
-    if (lang === "zh-tw" || lang === "zh-hk" || lang === "zh-mo" || lang.startsWith("zh-hant")) return "zh-TW";
+    if (lang === "zh-tw" || lang === "zh-hk" || lang === "zh-mo" || lang.startsWith("zh-hant"))
+      return "zh-TW";
     if (lang.startsWith("en")) return "en";
   }
   return "en";
 }
 
 const browserLanguages = (): readonly string[] =>
-  typeof navigator === "undefined" ? [] : navigator.languages?.length ? navigator.languages : [navigator.language];
+  typeof navigator === "undefined"
+    ? []
+    : navigator.languages?.length
+      ? navigator.languages
+      : [navigator.language];
 
 export const locale = pickLocale(browserLanguages());
 
