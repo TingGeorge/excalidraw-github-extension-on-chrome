@@ -65,6 +65,11 @@ export function App() {
             <AlertIcon size={24} />
             <h1>{t("errorTitle")}</h1>
             <p>{state.message}</p>
+            {params.back && (
+              <a className="xv-btn xv-btn--default" href={params.back}>
+                {t("backToGitHub")}
+              </a>
+            )}
             {(params.id || params.url) && (
               <Button
                 label={t("retry")}

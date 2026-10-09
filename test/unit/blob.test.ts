@@ -13,6 +13,15 @@ describe("rawLinkMatches", () => {
     expect(rawLinkMatches("https://github.com/o/r/raw/refs/heads/main/docs/b.excalidraw", A)).toBe(false);
     expect(rawLinkMatches("https://github.com/x/r/raw/refs/heads/main/docs/a.excalidraw", A)).toBe(false);
   });
+  it("rejects the previous branch's Raw link after switching branches", () => {
+    const dev = page("https://github.com/o/r/blob/dev/x.excalidraw");
+    expect(rawLinkMatches("https://github.com/o/r/raw/refs/heads/main/x.excalidraw", dev)).toBe(false);
+    expect(rawLinkMatches("https://github.com/o/r/raw/refs/heads/dev/x.excalidraw", dev)).toBe(true);
+  });
+  it("rejects a file with the same name in another folder", () => {
+    const top = page("https://github.com/o/r/blob/main/x.excalidraw");
+    expect(rawLinkMatches("https://github.com/o/r/raw/refs/heads/main/docs/x.excalidraw", top)).toBe(false);
+  });
   it("handles refs with slashes and encoded names", () => {
     const p = page("https://github.com/o/r/blob/feature/x/my%20diagram%231.excalidraw");
     expect(

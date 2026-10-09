@@ -52,3 +52,27 @@ test("Inline replaces only that file's code with the diagram", async ({ page }) 
   await expect(file.locator('[data-xgp="inline"]')).toHaveCount(0);
   await expect(file.locator(".blob-wrapper")).toBeVisible();
 });
+
+test("after a Turbo cache restore there is exactly one working button group", async ({ page, context }) => {
+  await page.goto(GIST);
+  await expect(page.locator('[data-xgp="actions"]')).toHaveCount(1);
+  // What Turbo does on back navigation: snapshot (before-cache), later restore a clone.
+  await page.evaluate(() => {
+    document.dispatchEvent(new Event("turbo:before-cache"));
+    document.body.replaceWith(document.body.cloneNode(true));
+  });
+  await expect(page.locator('[data-xgp="actions"]')).toHaveCount(1);
+  const [viewer] = await Promise.all([
+    context.waitForEvent("page"),
+    page.locator('[data-xgp="actions"]').getByRole("button", { name: "Preview" }).click(),
+  ]);
+  await expect(viewer.locator(".excalidraw canvas").first()).toBeVisible();
+});
+
+test("a restored clone without the before-cache cleanup is replaced, not duplicated", async ({ page }) => {
+  await page.goto(GIST);
+  await expect(page.locator('[data-xgp="actions"]')).toHaveCount(1);
+  await page.evaluate(() => document.body.replaceWith(document.body.cloneNode(true)));
+  await page.waitForTimeout(300);
+  await expect(page.locator('[data-xgp="actions"]')).toHaveCount(1);
+});

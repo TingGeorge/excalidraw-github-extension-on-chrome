@@ -4,7 +4,7 @@ import { teardownBlob, updateBlob } from "./blob";
 import { MARK, rafThrottle } from "./dom";
 import { teardownDiff, updateDiff } from "./diff";
 import { teardownGist, updateGist } from "./gist";
-import { handleEmbedMessage } from "./preview";
+import { handleEmbedMessage, syncInlineHeight } from "./preview";
 
 let settings: Settings | null = null;
 
@@ -32,6 +32,7 @@ async function main() {
   onSettingsChanged((next) => {
     const prev = settings;
     settings = next;
+    if (prev?.inlineHeight !== next.inlineHeight) syncInlineHeight(next.inlineHeight);
     // The inline height is saved while resizing the open preview: keep it open.
     const relevant = (s: Settings | null) => s && { ...s, inlineHeight: 0 };
     if (JSON.stringify(relevant(prev)) === JSON.stringify(relevant(next))) return;
@@ -53,6 +54,15 @@ async function main() {
   document.addEventListener("turbo:load", scheduleUpdate);
   document.addEventListener("turbo:render", scheduleUpdate);
   window.addEventListener("message", handleEmbedMessage);
+  // Turbo snapshots the page for back/forward navigation; a restored snapshot
+  // would contain copies of our UI without their event listeners.
+  document.addEventListener("turbo:before-cache", () => {
+    teardownBlob();
+    teardownDiff();
+    teardownGist();
+    document.querySelectorAll(`[${MARK}]`).forEach((n) => n.remove());
+    document.querySelectorAll("[data-xgp-hidden]").forEach((n) => n.removeAttribute("data-xgp-hidden"));
+  });
   update();
 }
 

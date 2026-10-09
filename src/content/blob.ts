@@ -41,10 +41,8 @@ export function rawLinkMatches(href: string, page: BlobUrl): boolean {
   } catch {
     return false;
   }
-  // `/owner/repo/raw/<ref, maybe refs/heads/...>/<path>` must end with the path
-  // after the ref's first segment; refAndPath is `<ref>/<path>`.
-  const rest = page.refAndPath.slice(page.refAndPath.indexOf("/") + 1);
-  return path.startsWith(`/${page.owner}/${page.repo}/raw/`) && path.endsWith(`/${rest}`);
+  // `/owner/repo/raw/[refs/heads/]<ref>/<path>` must end with this page's `<ref>/<path>`.
+  return path.startsWith(`/${page.owner}/${page.repo}/raw/`) && path.endsWith(`/${page.refAndPath}`);
 }
 
 function blobSection(): HTMLElement | null {
@@ -62,14 +60,17 @@ function embeddedRawLines(page: BlobUrl): string | null {
       const data = JSON.parse(script.textContent ?? "") as {
         payload?: {
           path?: string;
-          codeViewBlobLayoutRoute?: { path?: string };
+          codeViewBlobLayoutRoute?: { path?: string; refInfo?: { name?: string } };
           "codeViewBlobLayoutRoute.StyledBlob"?: { rawLines?: string[] | null };
         };
       };
       const payload = data.payload;
       const path = payload?.codeViewBlobLayoutRoute?.path ?? payload?.path;
+      const ref = payload?.codeViewBlobLayoutRoute?.refInfo?.name;
       const lines = payload?.["codeViewBlobLayoutRoute.StyledBlob"]?.rawLines;
-      if (path && page.refAndPath.endsWith(path) && Array.isArray(lines)) return lines.join("\n");
+      // The embedded data may be from before a client-side navigation: it must be this exact file.
+      const same = ref ? page.refAndPath === `${ref}/${path}` : page.refAndPath.endsWith(`/${path}`);
+      if (path && same && Array.isArray(lines)) return lines.join("\n");
     } catch {
       // not the payload we are looking for
     }

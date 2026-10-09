@@ -72,7 +72,13 @@ export async function routeGitHub(
       const url = new URL(route.request().url());
       const key = `${url.origin}${url.pathname}`;
       const hit = routes[key];
-      if (!hit) return route.fulfill({ status: 404, contentType: "text/plain", body: "Not Found" });
+      // GitHub answers a missing raw file with its HTML 404 page.
+      if (!hit)
+        return route.fulfill({
+          status: 404,
+          contentType: "text/html; charset=utf-8",
+          body: "<html>Not Found</html>",
+        });
       return route.fulfill({ status: hit.status ?? 200, contentType: hit.contentType, body: hit.body });
     },
   );

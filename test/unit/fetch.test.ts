@@ -10,6 +10,7 @@ describe("isAllowedFetchUrl", () => {
     "https://objects.githubusercontent.com/x",
     "https://gist.github.com/u/0123abcd/raw/abc/a.excalidraw",
     "https://gist.githubusercontent.com/u/0123abcd/raw/abc/a.excalidraw",
+    "https://github.com/o/r/releases/download/v1/a.excalidraw",
   ])("allows %s", (url) => {
     expect(isAllowedFetchUrl(url)).toBe(true);
   });
@@ -105,10 +106,17 @@ describe("fetchFileContent", () => {
   });
 
   it("reports HTTP errors", async () => {
+    stubFetch(() => response("nope", { status: 500 }));
+    const res = await fetchFileContent(url, false);
+    expect(res).toMatchObject({ ok: false, status: 500 });
+    expect((res as { error: string }).error).toContain("500");
+  });
+
+  it("explains a 404 (missing file, or a private file the session can't read)", async () => {
     stubFetch(() => response("nope", { status: 404 }));
     const res = await fetchFileContent(url, false);
     expect(res).toMatchObject({ ok: false, status: 404 });
-    expect((res as { error: string }).error).toContain("404");
+    expect((res as { error: string }).error).toMatch(/signed in/);
   });
 
   it("reports network errors", async () => {
@@ -131,6 +139,17 @@ describe("fetchFileContent", () => {
     stubFetch(() => response("x".repeat(11)));
     const res = await fetchFileContent(url, false, "same-origin", 10);
     expect(res).toMatchObject({ ok: false, status: 413 });
+  });
+
+  it("keeps GitHub's HTML 404 page a 404 (file not in this version)", async () => {
+    stubFetch(() =>
+      response("<html>Not Found</html>", {
+        status: 404,
+        headers: { "content-type": "text/html; charset=utf-8" },
+        url: "https://github.com/o/r/raw/main/a.excalidraw",
+      }),
+    );
+    expect(await fetchFileContent(url, false)).toMatchObject({ ok: false, status: 404 });
   });
 
   it("treats a redirect away from GitHub's file hosts as not readable (401)", async () => {

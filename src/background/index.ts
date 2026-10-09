@@ -1,4 +1,5 @@
 import { detectKind } from "../shared/files";
+import { t } from "../shared/i18n";
 import { fetchFileContent, isAllowedFetchUrl } from "../shared/fetch";
 import type { BackgroundRequest, Payload } from "../shared/protocol";
 import { getPayload, putPayload } from "./store";
@@ -12,12 +13,15 @@ const LINK_PATTERNS = [
   ".excalidraw.md",
   ".excalidrawlib",
 ].flatMap((ext) =>
+  // Only links the service worker can download (see isAllowedFetchUrl).
   [
-    "https://github.com",
-    "https://gist.github.com",
-    "https://raw.githubusercontent.com",
-    "https://gist.githubusercontent.com",
-  ].flatMap((origin) => [`${origin}/*${ext}`, `${origin}/*${ext}?*`]),
+    "https://github.com/*/blob/*",
+    "https://github.com/*/raw/*",
+    "https://github.com/*/releases/download/*",
+    "https://gist.github.com/*/raw/*",
+    "https://raw.githubusercontent.com/*",
+    "https://gist.githubusercontent.com/*",
+  ].flatMap((prefix) => [`${prefix}${ext}`, `${prefix}${ext}?*`]),
 );
 
 function viewerUrl(params: Record<string, string>): string {
@@ -68,7 +72,9 @@ async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSend
       if (!isValidPayload(msg.payload)) return { ok: false, error: "Invalid payload" };
       const id = await putPayload(msg.payload);
       const url = reloadUrl(msg.payload);
-      await openViewerTab({ id, ...(url ? { url } : {}) }, sender.tab);
+      // Diffs can't be rebuilt from a URL; an expired one links back to its page.
+      const back = msg.payload.mode === "diff" ? msg.payload.pageUrl : undefined;
+      await openViewerTab({ id, ...(url ? { url } : {}), ...(back ? { back } : {}) }, sender.tab);
       return { ok: true, id };
     }
     case "xgp:get": {
@@ -76,7 +82,7 @@ async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSend
       return payload ? { ok: true, payload } : { ok: false, error: "This preview has expired." };
     }
     case "xgp:fetch": {
-      if (!isAllowedFetchUrl(msg.url)) return { ok: false, status: 0, error: "URL not allowed" };
+      if (!isAllowedFetchUrl(msg.url)) return { ok: false, status: 0, error: t("urlNotAllowed") };
       return fetchFileContent(msg.url, Boolean(msg.binary), "include");
     }
     case "xgp:open-options": {

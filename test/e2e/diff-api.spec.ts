@@ -93,3 +93,29 @@ test("when no commits can be found, branch tips are compared and the viewer says
   await expect(viewer.locator(".xv-banner")).toContainText("latest versions of the branches");
   await expect(viewer.locator(".xv-diffstat__added")).toHaveText("+4");
 });
+
+test("a Preview diff button restored from Turbo's page cache is replaced by a working one", async ({
+  page,
+  context,
+}) => {
+  await routeGitHub(context, {
+    [PR]: { body: fixture("github/pr-files-full.html"), contentType: "text/html" },
+    [`${REPO}/raw/${MERGE_BASE}/${PATH}`]: {
+      body: fixture("github/how-it-works.base.excalidraw"),
+      contentType: "text/plain",
+    },
+    [`${REPO}/raw/${HEAD}/${PATH}`]: {
+      body: fixture("github/how-it-works.head.excalidraw"),
+      contentType: "text/plain",
+    },
+  });
+  await page.goto(PR);
+  const button = page.locator(`[data-xgp="diff-button"][data-xgp-path="${PATH}"]`);
+  await expect(button).toHaveCount(1);
+  // A cloned page has the same markup but no event listeners.
+  await page.evaluate(() => document.body.replaceWith(document.body.cloneNode(true)));
+  await page.waitForTimeout(400);
+  await expect(button).toHaveCount(1);
+  const [viewer] = await Promise.all([context.waitForEvent("page"), button.click()]);
+  await expect(viewer.locator(".xv-diffstat__added")).toHaveText("+4");
+});

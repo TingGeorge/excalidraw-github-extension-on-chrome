@@ -15,9 +15,11 @@ export function isAllowedFetchUrl(url: string): boolean {
     return false;
   }
   if (u.protocol !== "https:" || u.username || u.password || u.port) return false;
-  if (u.hostname === "github.com" || u.hostname === "gist.github.com") {
-    return /^\/[^/]+\/[^/]+\/raw\//.test(u.pathname);
+  if (u.hostname === "github.com") {
+    // raw downloads and release assets (which redirect to *.githubusercontent.com)
+    return /^\/[^/]+\/[^/]+\/(raw|releases\/download)\//.test(u.pathname);
   }
+  if (u.hostname === "gist.github.com") return /^\/[^/]+\/[^/]+\/raw\//.test(u.pathname);
   return u.hostname.endsWith(".githubusercontent.com");
 }
 
@@ -34,13 +36,20 @@ export async function fetchFileContent(
   maxBytes = MAX_FILE_BYTES,
 ): Promise<FetchResult> {
   if (!isAllowedFetchUrl(url)) {
-    return { ok: false, status: 0, error: `Refusing to fetch ${url}` };
+    return { ok: false, status: 0, error: t("urlNotAllowed") };
   }
   let res: Response;
   try {
     res = await fetch(url, { credentials, redirect: "follow", cache: "no-cache" });
   } catch (err) {
     return { ok: false, status: 0, error: err instanceof Error ? err.message : String(err) };
+  }
+  // Status first: GitHub serves a missing raw file as its HTML 404 page, and
+  // callers rely on 404 meaning "not in this version". (Private files also
+  // answer 404 when the session can't read them, hence the hint.)
+  if (!res.ok) {
+    const error = res.status === 404 ? t("signedOut") : `HTTP ${res.status} ${res.statusText}`.trim();
+    return { ok: false, status: res.status, error };
   }
   // Redirected to a login page (or anywhere but a file): the session cannot read it.
   const finalUrl = res.url || url;
@@ -50,9 +59,6 @@ export async function fetchFileContent(
     (type.startsWith("text/html") && new URL(finalUrl).hostname === "github.com")
   ) {
     return { ok: false, status: 401, error: t("signedOut") };
-  }
-  if (!res.ok) {
-    return { ok: false, status: res.status, error: `HTTP ${res.status} ${res.statusText}`.trim() };
   }
   const tooLarge = (n: number) => n > maxBytes;
   if (tooLarge(Number(res.headers.get("content-length") ?? 0))) {

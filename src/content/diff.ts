@@ -478,6 +478,8 @@ const SCAN_INTERVAL_MS = 150;
 let lastScan = -Infinity;
 let pendingScan: ReturnType<typeof setTimeout> | undefined;
 let mounted = false;
+/** Buttons this script created (Turbo's page cache restores dead clones of them). */
+const live = new WeakSet<Element>();
 
 export function updateDiff(page: PageType, settings: Settings, requestUpdate: () => void) {
   if (page.type !== "pull" && page.type !== "commit" && page.type !== "compare") return;
@@ -496,10 +498,18 @@ export function updateDiff(page: PageType, settings: Settings, requestUpdate: ()
     const kind = detectKind(file.path);
     if (!kind || needsSniff(kind)) continue;
     const existing = file.slot.querySelector<HTMLElement>(`[${MARK}="diff-button"]`);
-    if (existing?.dataset.xgpPath === file.path && existing.dataset.xgpPage === key) continue;
+    if (
+      existing &&
+      live.has(existing) &&
+      existing.dataset.xgpPath === file.path &&
+      existing.dataset.xgpPage === key
+    ) {
+      continue;
+    }
     existing?.remove();
     const btn = diffButton(page, file, settings);
     btn.dataset.xgpPage = key;
+    live.add(btn);
     file.slot.insertBefore(btn, file.before?.parentElement === file.slot ? file.before : null);
     mounted = true;
   }

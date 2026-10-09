@@ -39,6 +39,11 @@ export interface FilePreviewOptions {
 /** Height chosen by resizing in this tab; settings are saved with a delay. */
 let sessionHeight: number | null = null;
 
+/** Another tab or the options page saved a different height: stop overriding it. */
+export function syncInlineHeight(saved: number): void {
+  if (sessionHeight !== null && sessionHeight !== saved) sessionHeight = null;
+}
+
 /** Plain images are downloaded just to check for a scene; skip huge ones. */
 const SNIFF_MAX_BYTES = 15 * 1024 * 1024;
 
@@ -140,6 +145,10 @@ export class FilePreview {
 
   /** Insert the button group before `anchor` unless it is already there. */
   mountActions(anchor: Element): void {
+    // Drop copies we don't own, e.g. dead clones restored from Turbo's page cache.
+    anchor.parentElement?.querySelectorAll(`:scope > [${MARK}="actions"]`).forEach((n) => {
+      if (n !== this.actions) n.remove();
+    });
     if (this.actions?.isConnected && this.actions.nextElementSibling === anchor) return;
     this.actions?.remove();
     this.actions = this.buildActions();
