@@ -11,12 +11,14 @@ const LINK_PATTERNS = [
   ".excalidraw.png",
   ".excalidraw.md",
   ".excalidrawlib",
-].flatMap((ext) => [
-  `https://github.com/*${ext}`,
-  `https://github.com/*${ext}?*`,
-  `https://raw.githubusercontent.com/*${ext}`,
-  `https://raw.githubusercontent.com/*${ext}?*`,
-]);
+].flatMap((ext) =>
+  [
+    "https://github.com",
+    "https://gist.github.com",
+    "https://raw.githubusercontent.com",
+    "https://gist.githubusercontent.com",
+  ].flatMap((origin) => [`${origin}/*${ext}`, `${origin}/*${ext}?*`]),
+);
 
 function viewerUrl(params: Record<string, string>): string {
   return chrome.runtime.getURL(`viewer.html?${new URLSearchParams(params).toString()}`);
@@ -85,7 +87,7 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: MENU_ID,
-      title: "Preview Excalidraw diagram",
+      title: chrome.i18n.getMessage("contextMenuPreview") || "Preview Excalidraw diagram",
       contexts: ["link"],
       targetUrlPatterns: LINK_PATTERNS,
     });

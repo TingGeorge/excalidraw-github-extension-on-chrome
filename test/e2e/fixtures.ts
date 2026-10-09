@@ -62,11 +62,14 @@ export async function routeGitHub(
   context: BrowserContext,
   routes: Record<string, { body: string | Buffer; contentType: string; status?: number }>,
 ) {
-  await context.route(/^https:\/\/(github\.com|raw\.githubusercontent\.com)\//, async (route: Route) => {
-    const url = new URL(route.request().url());
-    const key = `${url.origin}${url.pathname}`;
-    const hit = routes[key];
-    if (!hit) return route.fulfill({ status: 404, contentType: "text/plain", body: "Not Found" });
-    return route.fulfill({ status: hit.status ?? 200, contentType: hit.contentType, body: hit.body });
-  });
+  await context.route(
+    /^https:\/\/(github\.com|gist\.github\.com|[a-z]+\.githubusercontent\.com)\//,
+    async (route: Route) => {
+      const url = new URL(route.request().url());
+      const key = `${url.origin}${url.pathname}`;
+      const hit = routes[key];
+      if (!hit) return route.fulfill({ status: 404, contentType: "text/plain", body: "Not Found" });
+      return route.fulfill({ status: hit.status ?? 200, contentType: hit.contentType, body: hit.body });
+    },
+  );
 }

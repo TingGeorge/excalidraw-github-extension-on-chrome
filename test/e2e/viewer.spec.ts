@@ -148,3 +148,32 @@ test.describe("inline preview on GitHub", () => {
       .toBe(Math.round(saved));
   });
 });
+
+test.describe("opening a GitHub link directly (context menu)", () => {
+  test("viewer.html?url=<blob url> downloads the file through the service worker", async ({
+    page,
+    context,
+    extensionId,
+  }) => {
+    await routeGitHub(context, {
+      [`${REPO}/raw/main/samples/how-it-works.excalidraw`]: {
+        body: readFileSync(SAMPLE, "utf8"),
+        contentType: "text/plain",
+      },
+    });
+    await page.goto(`chrome-extension://${extensionId}/viewer.html?url=${encodeURIComponent(BLOB)}`);
+    await expect(page.locator(".excalidraw canvas").first()).toBeVisible();
+    await expect(page.locator(".xv-title__name")).toHaveText("how-it-works.excalidraw");
+  });
+
+  test("a missing file shows the signed-out hint and a retry button", async ({
+    page,
+    context,
+    extensionId,
+  }) => {
+    await routeGitHub(context, {});
+    await page.goto(`chrome-extension://${extensionId}/viewer.html?url=${encodeURIComponent(BLOB)}`);
+    await expect(page.getByRole("alert")).toContainText("signed in");
+    await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+  });
+});

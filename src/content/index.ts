@@ -1,13 +1,19 @@
 import { parsePage } from "../shared/github";
 import { loadSettings, onSettingsChanged, type Settings } from "../shared/settings";
-import { handleEmbedMessage, teardownBlob, updateBlob } from "./blob";
+import { teardownBlob, updateBlob } from "./blob";
 import { rafThrottle } from "./dom";
 import { teardownDiff, updateDiff } from "./diff";
+import { teardownGist, updateGist } from "./gist";
+import { handleEmbedMessage } from "./preview";
 
 let settings: Settings | null = null;
 
 function update() {
   if (!settings) return;
+  if (location.hostname === "gist.github.com") {
+    updateGist(settings);
+    return;
+  }
   const page = parsePage(location.href);
   if (page.type === "blob") updateBlob(page, settings);
   else teardownBlob();
@@ -32,6 +38,7 @@ async function main() {
     // Re-create our UI with the new settings.
     teardownBlob();
     teardownDiff();
+    teardownGist();
     scheduleUpdate();
   });
 

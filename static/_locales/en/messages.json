@@ -1,0 +1,11 @@
+{
+  "extName": {
+    "message": "Excalidraw Preview for GitHub"
+  },
+  "extDescription": {
+    "message": "Preview Excalidraw diagrams on GitHub: open .excalidraw files as drawings in a new tab, inline, or as a side-by-side PR diff."
+  },
+  "contextMenuPreview": {
+    "message": "Preview Excalidraw diagram"
+  }
+}

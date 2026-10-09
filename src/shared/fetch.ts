@@ -8,6 +8,7 @@ export function isAllowedFetchUrl(url: string): boolean {
     if (u.protocol !== "https:") return false;
     return (
       u.hostname === "github.com" ||
+      u.hostname === "gist.github.com" ||
       u.hostname === "raw.githubusercontent.com" ||
       u.hostname.endsWith(".githubusercontent.com")
     );

@@ -24,6 +24,7 @@ const manifest = JSON.parse(await readFile(join(root, "static/manifest.json"), "
 manifest.version = pkg.version;
 await writeFile(join(dist, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
 await cp(join(root, "static/icons"), join(dist, "icons"), { recursive: true });
+await cp(join(root, "static/_locales"), join(dist, "_locales"), { recursive: true });
 await cp(join(root, "node_modules/@excalidraw/excalidraw/dist/prod/fonts"), join(dist, "fonts"), {
   recursive: true,
 });
