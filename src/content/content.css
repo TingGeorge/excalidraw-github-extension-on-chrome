@@ -1,0 +1,193 @@
+/* Styles injected into github.com. Everything is prefixed with xgp- and uses
+   GitHub's Primer CSS variables so it follows the active GitHub theme. */
+
+.xgp-actions {
+  display: inline-flex;
+  flex: none;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.xgp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--button-default-borderColor-rest, var(--borderColor-default, #d1d9e0));
+  border-radius: 6px;
+  background: var(--button-default-bgColor-rest, var(--bgColor-muted, #f6f8fa));
+  box-shadow: var(--button-default-shadow-resting, none);
+  color: var(--button-default-fgColor-rest, var(--fgColor-default, #25292e));
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.xgp-btn:hover:not(:disabled) {
+  background: var(--button-default-bgColor-hover, var(--bgColor-neutral-muted, #eff2f5));
+  border-color: var(--button-default-borderColor-hover, var(--borderColor-default, #d1d9e0));
+}
+
+.xgp-btn:active:not(:disabled) {
+  background: var(--button-default-bgColor-active, #e6eaef);
+}
+
+.xgp-btn:focus-visible {
+  outline: 2px solid var(--focus-outlineColor, #0969da);
+  outline-offset: -2px;
+}
+
+.xgp-btn[aria-pressed="true"] {
+  background: var(--button-default-bgColor-selected, var(--bgColor-neutral-muted, #e6eaef));
+}
+
+.xgp-btn[aria-busy] {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.xgp-btn[aria-busy] .xgp-icon {
+  animation: xgp-pulse 0.9s ease-in-out infinite alternate;
+}
+
+.xgp-btn .xgp-icon {
+  flex: none;
+  color: var(--fgColor-muted, #59636e);
+}
+
+.xgp-actions > .xgp-btn + .xgp-btn {
+  margin-left: -1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.xgp-actions > .xgp-btn:not(:last-child) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.xgp-actions > .xgp-btn:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+
+/* Small screens: icons only. */
+@media (max-width: 543px) {
+  .xgp-actions .xgp-btn__label {
+    display: none;
+  }
+}
+
+@keyframes xgp-pulse {
+  to {
+    opacity: 0.3;
+  }
+}
+
+/* Inline preview ------------------------------------------------------------ */
+
+[data-xgp-hidden] {
+  display: none !important;
+}
+
+.xgp-inline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--borderColor-default, #d1d9e0);
+  border-radius: 6px;
+  background: var(--bgColor-default, #fff);
+}
+
+.xgp-inline__frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  display: block;
+  color-scheme: normal;
+}
+
+.xgp-inline__status {
+  position: absolute;
+  inset: 0 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  color: var(--fgColor-muted, #59636e);
+  font-size: 14px;
+  text-align: center;
+}
+
+.xgp-inline__status--error {
+  color: var(--fgColor-danger, #d1242f);
+}
+
+.xgp-inline__resize {
+  flex: none;
+  height: 8px;
+  cursor: ns-resize;
+  border-top: 1px solid var(--borderColor-muted, #d1d9e0b3);
+  background: var(--bgColor-muted, #f6f8fa);
+  position: relative;
+}
+
+.xgp-inline__resize::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  width: 32px;
+  height: 3px;
+  margin-left: -16px;
+  border-radius: 2px;
+  background: var(--borderColor-default, #d1d9e0);
+}
+
+.xgp-inline__resize:hover::after,
+.xgp-inline__resize:focus-visible::after {
+  background: var(--fgColor-muted, #59636e);
+}
+
+.xgp-inline__resize:focus-visible {
+  outline: 2px solid var(--focus-outlineColor, #0969da);
+  outline-offset: -2px;
+}
+
+.xgp-inline--resizing .xgp-inline__frame {
+  pointer-events: none;
+}
+
+/* Toast --------------------------------------------------------------------- */
+
+.xgp-toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 2147483000;
+  max-width: 420px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: var(--bgColor-emphasis, #25292e);
+  color: var(--fgColor-onEmphasis, #fff);
+  font-size: 13px;
+  box-shadow: var(--shadow-floating-large, 0 8px 24px rgba(66, 74, 83, 0.2));
+}
+
+.xgp-toast--error {
+  background: var(--bgColor-danger-emphasis, #cf222e);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xgp-btn[aria-busy] .xgp-icon {
+    animation: none;
+  }
+}
