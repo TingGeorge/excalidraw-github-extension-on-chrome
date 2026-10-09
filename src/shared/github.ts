@@ -126,6 +126,20 @@ export function parseCompareRange(range: string): { base: string; head: string }
   return null;
 }
 
+/**
+ * One side of a compare range: `branch`, `owner:branch` (a fork with the same
+ * repository name) or `owner:repo:branch`. Git refs cannot contain `:`.
+ */
+export function parseCompareSide(side: string, repo: RepoRef): { repo: RepoRef; ref: string } {
+  const parts = side.split(":");
+  if (parts.length === 2 && parts[0] && parts[1])
+    return { repo: { owner: parts[0], repo: repo.repo }, ref: parts[1] };
+  if (parts.length >= 3 && parts[0] && parts[1]) {
+    return { repo: { owner: parts[0], repo: parts[1] }, ref: parts.slice(2).join(":") };
+  }
+  return { repo, ref: side };
+}
+
 export function shortSha(ref: string): string {
   return /^[0-9a-f]{40}$|^[0-9a-f]{64}$/i.test(ref) ? ref.slice(0, 7) : ref;
 }

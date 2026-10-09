@@ -48,6 +48,8 @@ export interface DiffPayload {
   base: DiffSide;
   head: DiffSide;
   theme?: Theme;
+  /** The compared commits were guessed from branch names and may differ from GitHub's diff. */
+  approximate?: boolean;
 }
 
 export type Payload = ViewPayload | DiffPayload;

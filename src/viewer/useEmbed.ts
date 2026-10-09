@@ -23,6 +23,11 @@ export function useEmbedInteraction(embed: boolean): boolean {
 
   useEffect(() => {
     if (!embed) return;
+    // Only ever talk to the GitHub page that embeds us.
+    const ancestor = location.ancestorOrigins?.[0] ?? "";
+    const parentOrigin = ["https://github.com", "https://gist.github.com"].includes(ancestor)
+      ? ancestor
+      : null;
     let isActive = false;
     const update = (value: boolean) => {
       isActive = value;
@@ -42,7 +47,7 @@ export function useEmbedInteraction(embed: boolean): boolean {
         dx: e.deltaX * scale,
         dy: e.deltaY * scale,
       };
-      window.parent.postMessage(message, "*");
+      if (parentOrigin) window.parent.postMessage(message, parentOrigin);
     };
     window.addEventListener("pointerdown", onPointerDown, true);
     window.addEventListener("blur", onBlur);

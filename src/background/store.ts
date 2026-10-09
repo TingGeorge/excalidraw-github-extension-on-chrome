@@ -2,17 +2,21 @@
  * Payload store backed by IndexedDB in the service worker. Payloads can be
  * larger than chrome.storage.session allows (diagrams with embedded images),
  * and must survive service worker restarts so a viewer tab can be reloaded.
+ * Old entries are pruned by age, count and total size.
  */
 import type { Payload } from "../shared/protocol";
 
 const DB_NAME = "excalidraw-github-preview";
 const STORE = "payloads";
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_ENTRIES = 100;
+const MAX_ENTRIES = 60;
+const MAX_TOTAL_BYTES = 150 * 1024 * 1024;
 
 interface Entry {
   id: string;
   created: number;
+  /** Approximate size in bytes (string lengths). */
+  size: number;
   payload: Payload;
 }
 
@@ -42,13 +46,18 @@ function done(tx: IDBTransaction): Promise<void> {
   });
 }
 
+export function payloadSize(payload: Payload): number {
+  if (payload.mode === "view") return payload.content.data.length;
+  return (payload.base.content?.data.length ?? 0) + (payload.head.content?.data.length ?? 0);
+}
+
 export async function putPayload(payload: Payload): Promise<string> {
   const db = await openDb();
   const id = crypto.randomUUID();
   const tx = db.transaction(STORE, "readwrite");
-  tx.objectStore(STORE).put({ id, created: Date.now(), payload } satisfies Entry);
+  tx.objectStore(STORE).put({ id, created: Date.now(), size: payloadSize(payload), payload } satisfies Entry);
   await done(tx);
-  void prune().catch(() => undefined);
+  void prune(id).catch(() => undefined);
   return id;
 }
 
@@ -61,20 +70,24 @@ export async function getPayload(id: string): Promise<Payload | null> {
   return entry?.payload ?? null;
 }
 
-/** Drop entries older than a week and keep at most MAX_ENTRIES. */
-async function prune(): Promise<void> {
+/** Keep the newest entries within the age, count and size budgets (never the one just added). */
+async function prune(keep: string): Promise<void> {
   const db = await openDb();
   const tx = db.transaction(STORE, "readwrite");
-  const store = tx.objectStore(STORE);
-  const keysReq = store.index("created").getAllKeys();
-  keysReq.onsuccess = () => {
-    // Index keys come back oldest first; getAllKeys on an index yields primary keys.
-    const ids = keysReq.result;
-    const excess = Math.max(0, ids.length - MAX_ENTRIES);
-    ids.slice(0, excess).forEach((id) => store.delete(id));
-    const cutoff = Date.now() - MAX_AGE_MS;
-    const oldReq = store.index("created").getAllKeys(IDBKeyRange.upperBound(cutoff));
-    oldReq.onsuccess = () => oldReq.result.forEach((id) => store.delete(id));
+  const cutoff = Date.now() - MAX_AGE_MS;
+  let count = 0;
+  let total = 0;
+  // Newest first.
+  const cursorReq = tx.objectStore(STORE).index("created").openCursor(null, "prev");
+  cursorReq.onsuccess = () => {
+    const cursor = cursorReq.result;
+    if (!cursor) return;
+    const entry = cursor.value as Entry;
+    count++;
+    total += entry.size ?? payloadSize(entry.payload);
+    const overBudget = count > MAX_ENTRIES || total > MAX_TOTAL_BYTES || entry.created < cutoff;
+    if (overBudget && entry.id !== keep) cursor.delete();
+    cursor.continue();
   };
   await done(tx);
 }

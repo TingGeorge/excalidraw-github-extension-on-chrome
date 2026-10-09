@@ -1,4 +1,5 @@
 import LZString from "lz-string";
+import { t } from "./i18n";
 
 /**
  * Extract the scene JSON from an Obsidian Excalidraw plugin file (`*.excalidraw.md`).
@@ -15,13 +16,13 @@ export function extractObsidianScene(markdown: string): string {
   fence.lastIndex = searchFrom;
   const match = fence.exec(text);
   if (!match) {
-    throw new Error("No Excalidraw drawing found in this Markdown file.");
+    throw new Error(t("errNoObsidianDrawing"));
   }
   const [, format, body = ""] = match;
   if (format === "json") return body.trim();
   const decompressed = LZString.decompressFromBase64(body.replace(/\s+/g, ""));
   if (!decompressed) {
-    throw new Error("Could not decompress the Obsidian Excalidraw drawing.");
+    throw new Error(t("errObsidianDecompress"));
   }
   return decompressed;
 }

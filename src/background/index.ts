@@ -33,6 +33,25 @@ async function openViewerTab(params: Record<string, string>, sender?: chrome.tab
   });
 }
 
+/**
+ * Where a viewer can re-download the file if its stored payload is gone:
+ * the blob page (best: keeps repo/path context) or the raw URL.
+ */
+export function reloadUrl(payload: Payload): string | undefined {
+  if (payload.mode !== "view") return undefined;
+  const { htmlUrl, rawUrl } = payload.source;
+  if (htmlUrl && /^https:\/\/github\.com\/[^/]+\/[^/]+\/blob\//.test(htmlUrl)) return htmlUrl;
+  return rawUrl;
+}
+
+/** Only our own pages and our content scripts on GitHub may talk to the service worker. */
+const TRUSTED_ORIGINS = new Set(["https://github.com", "https://gist.github.com"]);
+function isTrustedSender(sender: chrome.runtime.MessageSender): boolean {
+  if (sender.id !== chrome.runtime.id) return false;
+  const origin = sender.origin ?? (sender.url ? new URL(sender.url).origin : "");
+  return origin === new URL(chrome.runtime.getURL("/")).origin || TRUSTED_ORIGINS.has(origin);
+}
+
 function isValidPayload(value: unknown): value is Payload {
   if (!value || typeof value !== "object") return false;
   const p = value as Partial<Payload>;
@@ -48,7 +67,8 @@ async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSend
     case "xgp:open": {
       if (!isValidPayload(msg.payload)) return { ok: false, error: "Invalid payload" };
       const id = await putPayload(msg.payload);
-      await openViewerTab({ id }, sender.tab);
+      const url = reloadUrl(msg.payload);
+      await openViewerTab({ id, ...(url ? { url } : {}) }, sender.tab);
       return { ok: true, id };
     }
     case "xgp:get": {
@@ -69,12 +89,7 @@ async function handle(msg: BackgroundRequest, sender: chrome.runtime.MessageSend
 }
 
 chrome.runtime.onMessage.addListener((msg: BackgroundRequest, sender, sendResponse) => {
-  if (
-    sender.id !== chrome.runtime.id ||
-    !msg ||
-    typeof msg.type !== "string" ||
-    !msg.type.startsWith("xgp:")
-  ) {
+  if (!isTrustedSender(sender) || !msg || typeof msg.type !== "string" || !msg.type.startsWith("xgp:")) {
     return false;
   }
   handle(msg, sender).then(sendResponse, (err: unknown) =>

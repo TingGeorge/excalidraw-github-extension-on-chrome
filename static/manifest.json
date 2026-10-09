@@ -49,6 +49,6 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; frame-src 'none'; form-action 'none'; connect-src 'self' data: blob: https://github.com https://gist.github.com https://*.githubusercontent.com; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:"
   }
 }

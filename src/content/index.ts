@@ -1,7 +1,7 @@
 import { parsePage } from "../shared/github";
 import { loadSettings, onSettingsChanged, type Settings } from "../shared/settings";
 import { teardownBlob, updateBlob } from "./blob";
-import { rafThrottle } from "./dom";
+import { MARK, rafThrottle } from "./dom";
 import { teardownDiff, updateDiff } from "./diff";
 import { teardownGist, updateGist } from "./gist";
 import { handleEmbedMessage } from "./preview";
@@ -19,7 +19,7 @@ function update() {
   else teardownBlob();
 
   if (settings.diffButtons && (page.type === "pull" || page.type === "commit" || page.type === "compare")) {
-    updateDiff(page, settings);
+    updateDiff(page, settings, scheduleUpdate);
   } else {
     teardownDiff();
   }
@@ -43,8 +43,12 @@ async function main() {
   });
 
   // GitHub navigates with Turbo and React Router without full page loads, and
-  // re-renders parts of the page at any time: re-check on every DOM change.
-  new MutationObserver(scheduleUpdate).observe(document.documentElement, { childList: true, subtree: true });
+  // re-renders parts of the page at any time: re-check on DOM changes, except
+  // the ones happening inside our own UI.
+  const ours = (node: Node) => (node instanceof Element ? node : node.parentElement)?.closest(`[${MARK}]`);
+  new MutationObserver((records) => {
+    if (records.some((r) => !ours(r.target))) scheduleUpdate();
+  }).observe(document.documentElement, { childList: true, subtree: true });
   window.addEventListener("popstate", scheduleUpdate);
   document.addEventListener("turbo:load", scheduleUpdate);
   document.addEventListener("turbo:render", scheduleUpdate);

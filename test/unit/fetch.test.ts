@@ -8,6 +8,8 @@ describe("isAllowedFetchUrl", () => {
     "https://raw.githubusercontent.com/o/r/main/a.excalidraw",
     "https://media.githubusercontent.com/media/o/r/main/a.png",
     "https://objects.githubusercontent.com/x",
+    "https://gist.github.com/u/0123abcd/raw/abc/a.excalidraw",
+    "https://gist.githubusercontent.com/u/0123abcd/raw/abc/a.excalidraw",
   ])("allows %s", (url) => {
     expect(isAllowedFetchUrl(url)).toBe(true);
   });
@@ -29,6 +31,13 @@ describe("isAllowedFetchUrl", () => {
     "/o/r/raw/main/a",
     "garbage",
     "",
+    // github.com pages other than raw downloads
+    "https://github.com/o/r/blob/main/a.excalidraw",
+    "https://github.com/settings/profile",
+    "https://github.com/o/r",
+    "https://gist.github.com/u/0123abcd",
+    "https://github.com:8443/o/r/raw/main/a",
+    "https://token@github.com/o/r/raw/main/a",
   ])("rejects %j", (url) => {
     expect(isAllowedFetchUrl(url)).toBe(false);
   });
@@ -114,8 +123,19 @@ describe("fetchFileContent", () => {
   it("rejects files whose content-length is too large", async () => {
     stubFetch(() => response("x", { headers: { "content-length": String(MAX_FILE_BYTES + 1) } }));
     const res = await fetchFileContent(url, false);
-    expect(res).toMatchObject({ ok: false, status: 200 });
+    expect(res).toMatchObject({ ok: false, status: 413 });
     expect((res as { error: string }).error).toMatch(/too large/i);
+  });
+
+  it("rejects bodies over the limit even without content-length", async () => {
+    stubFetch(() => response("x".repeat(11)));
+    const res = await fetchFileContent(url, false, "same-origin", 10);
+    expect(res).toMatchObject({ ok: false, status: 413 });
+  });
+
+  it("treats a redirect away from GitHub's file hosts as not readable (401)", async () => {
+    stubFetch(() => response("<html></html>", { url: "https://example.com/elsewhere" }));
+    expect(await fetchFileContent(url, false)).toMatchObject({ ok: false, status: 401 });
   });
 
   it("accepts files at exactly the limit", async () => {

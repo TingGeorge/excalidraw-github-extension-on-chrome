@@ -177,3 +177,40 @@ test.describe("opening a GitHub link directly (context menu)", () => {
     await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
   });
 });
+
+test("Discard edits works more than once", async ({ page, extensionId }) => {
+  await openLocal(page, extensionId);
+  await page.getByRole("button", { name: "Edit" }).click();
+  const canvas = page.locator("canvas.interactive");
+  const box = (await canvas.boundingBox())!;
+  const draw = async (dx: number) => {
+    await page.keyboard.press("r");
+    await page.mouse.move(box.x + box.width - 300 + dx, box.y + box.height - 220);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width - 200 + dx, box.y + box.height - 140, { steps: 4 });
+    await page.mouse.up();
+    await page.keyboard.press("Escape");
+  };
+  for (const dx of [0, 40]) {
+    await draw(dx);
+    await expect(page.getByText("Local edits are not saved to GitHub")).toBeVisible();
+    await page.getByRole("button", { name: "Discard edits" }).click();
+    await expect(page.getByText("Local edits are not saved to GitHub")).toHaveCount(0);
+  }
+});
+
+test("an expired preview falls back to downloading the file again", async ({
+  page,
+  context,
+  extensionId,
+}) => {
+  await routeGitHub(context, {
+    [`${REPO}/raw/main/samples/how-it-works.excalidraw`]: {
+      body: readFileSync(SAMPLE, "utf8"),
+      contentType: "text/plain",
+    },
+  });
+  await page.goto(`chrome-extension://${extensionId}/viewer.html?id=gone&url=${encodeURIComponent(BLOB)}`);
+  await expect(page.locator(".excalidraw canvas").first()).toBeVisible();
+  await expect(page.locator(".xv-title__name")).toHaveText("how-it-works.excalidraw");
+});

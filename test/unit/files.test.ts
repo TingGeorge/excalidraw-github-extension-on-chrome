@@ -59,13 +59,14 @@ describe("detectKind", () => {
     expect(detectKind("x.excalidraw.svg")).toBe("excalidraw-svg");
   });
 
-  it("strips query and hash", () => {
-    expect(detectKind("a.excalidraw?raw=true")).toBe("excalidraw");
-    expect(detectKind("a.excalidraw#L10")).toBe("excalidraw");
-    expect(detectKind("https://github.com/o/r/blob/main/a.excalidraw.svg?plain=1#top")).toBe(
-      "excalidraw-svg",
-    );
-    expect(detectKind("a.txt?x=.excalidraw")).toBeNull();
+  it("treats # and ? as part of the file name (they are legal in paths)", () => {
+    expect(detectKind("diagram#1.excalidraw")).toBe("excalidraw");
+    expect(detectKind("what?.excalidraw.svg")).toBe("excalidraw-svg");
+    expect(detectKind("diagram%231.excalidraw")).toBe("excalidraw");
+    expect(detectKind("a.excalidraw#L10")).toBeNull();
+    expect(
+      detectKind(new URL("https://github.com/o/r/blob/main/a.excalidraw.svg?plain=1#top").pathname),
+    ).toBe("excalidraw-svg");
   });
 
   it("decodes URL-encoded names", () => {
@@ -81,8 +82,10 @@ describe("fileNameOf", () => {
     expect(fileNameOf("c.txt")).toBe("c.txt");
     expect(fileNameOf("a/b/")).toBe("");
   });
-  it("strips query/hash and decodes", () => {
-    expect(fileNameOf("a/b%20c.txt?x=1#y")).toBe("b c.txt");
+  it("decodes and keeps # and ?", () => {
+    expect(fileNameOf("a/b%20c.txt")).toBe("b c.txt");
+    expect(fileNameOf("a/diagram%231.excalidraw")).toBe("diagram#1.excalidraw");
+    expect(fileNameOf("a/diagram#1.excalidraw")).toBe("diagram#1.excalidraw");
     expect(fileNameOf("a/%E5%9C%96.png")).toBe("圖.png");
   });
   it("keeps raw segment on malformed escapes", () => {

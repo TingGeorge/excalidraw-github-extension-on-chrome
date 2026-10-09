@@ -23,10 +23,28 @@ function rawButton(): HTMLAnchorElement | null {
   return document.querySelector<HTMLAnchorElement>(SELECTORS.rawButton);
 }
 
-function rawUrl(): string | null {
+/**
+ * Download URL for the file in the address bar. GitHub's Raw link is preferred
+ * (it resolves ambiguous refs), but after client-side navigation the URL can
+ * change before the page re-renders, so the link must point at this file.
+ */
+function rawUrl(page: BlobUrl): string | null {
   const href = rawButton()?.href;
-  if (href && href.includes("/raw/")) return href;
+  if (href && rawLinkMatches(href, page)) return href;
   return rawUrlFromBlobUrl(location.href);
+}
+
+export function rawLinkMatches(href: string, page: BlobUrl): boolean {
+  let path: string;
+  try {
+    path = decodeURIComponent(new URL(href).pathname);
+  } catch {
+    return false;
+  }
+  // `/owner/repo/raw/<ref, maybe refs/heads/...>/<path>` must end with the path
+  // after the ref's first segment; refAndPath is `<ref>/<path>`.
+  const rest = page.refAndPath.slice(page.refAndPath.indexOf("/") + 1);
+  return path.startsWith(`/${page.owner}/${page.repo}/raw/`) && path.endsWith(`/${rest}`);
 }
 
 function blobSection(): HTMLElement | null {
@@ -99,7 +117,7 @@ export function updateBlob(page: BlobUrl, next: Settings) {
       key: href,
       kind,
       fileName: page.fileName,
-      rawUrl,
+      rawUrl: () => rawUrl(page),
       source: () => ({ htmlUrl: href, repo: `${page.owner}/${page.repo}`, ...splitRefAndPath(page) }),
       body: blobSection,
       fallbackText: () => embeddedRawLines(page),

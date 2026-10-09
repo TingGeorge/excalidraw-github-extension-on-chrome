@@ -85,22 +85,22 @@ export function DiffViewer({
 
   // Highlights only make sense when both versions exist.
   const bothSides = Boolean(loaded?.base && loaded?.head);
-  const sceneFor = useCallback(
-    (side: Side): El[] => {
+  const sceneElements = useMemo(() => {
+    const build = (side: Side): El[] => {
       const scene = loaded?.[side];
       if (!scene) return [];
       const marks = highlight && bothSides && diff ? highlightElements(diff.changes, side) : [];
       return [...marks, ...scene.elements];
-    },
-    [loaded, highlight, bothSides, diff],
-  );
+    };
+    return { base: build("base"), head: build("head") };
+  }, [loaded, highlight, bothSides, diff]);
 
   // Re-render highlights when toggled.
   useEffect(() => {
     for (const side of ["base", "head"] as const) {
-      apis[side]?.updateScene({ elements: sceneFor(side), captureUpdate: CaptureUpdateAction.NEVER });
+      apis[side]?.updateScene({ elements: sceneElements[side], captureUpdate: CaptureUpdateAction.NEVER });
     }
-  }, [sceneFor, apis]);
+  }, [sceneElements, apis]);
 
   const allElements = useMemo(
     () => [...(loaded?.base?.elements ?? []), ...(loaded?.head?.elements ?? [])].filter((e) => !e.isDeleted),
@@ -334,13 +334,14 @@ export function DiffViewer({
             <Excalidraw
               excalidrawAPI={side === "base" ? onBaseApi : onHeadApi}
               initialData={{
-                elements: sceneFor(side),
+                elements: sceneElements[side],
                 appState: { ...scene.appState, theme },
                 files: scene.files,
                 scrollToContent: true,
               }}
               viewModeEnabled
               theme={theme}
+              validateEmbeddable={false}
               langCode={excalidrawLangCode}
               detectScroll={false}
               onScrollChange={side === "base" ? onBaseScroll : onHeadScroll}
@@ -367,6 +368,7 @@ export function DiffViewer({
   return (
     <div className={`xv-app xv-app--diff${embed ? " xv-app--embed" : ""}`}>
       <Header compact={embed} title={title} actions={actions} />
+      {payload.approximate && <div className="xv-banner">{t("approximateDiff")}</div>}
       {error ? (
         <div className="xv-center xv-error" role="alert">
           <AlertIcon size={24} />

@@ -1,5 +1,5 @@
 import "./options.css";
-import { t, type MessageKey } from "../shared/i18n";
+import { locale, t, type MessageKey } from "../shared/i18n";
 import {
   INLINE_HEIGHT_MAX,
   INLINE_HEIGHT_MIN,
@@ -167,5 +167,5 @@ async function render() {
   }
 }
 
-document.documentElement.lang = navigator.language;
+document.documentElement.lang = locale;
 void render();

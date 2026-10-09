@@ -66,6 +66,9 @@ export function SceneViewer({
     document.title = `${source.fileName} · Excalidraw Preview`;
   }, [source.fileName]);
 
+  // Edits mutate elements in place; keep `scene.elements` pristine for "Discard edits".
+  const initialElements = useMemo(() => (scene ? structuredClone(scene.elements) : null), [scene]);
+
   /** Set once the user pans or zooms; until then resizes (e.g. of the inline frame) refit. */
   const userMoved = useRef(false);
   const maxZoom = scene?.libraryItemCount ? 1.5 : 1;
@@ -134,7 +137,8 @@ export function SceneViewer({
 
   const discardEdits = () => {
     if (!api || !scene) return;
-    api.updateScene({ elements: scene.elements, captureUpdate: CaptureUpdateAction.NEVER });
+    // Excalidraw mutates the elements it is given, so always hand it copies.
+    api.updateScene({ elements: structuredClone(scene.elements), captureUpdate: CaptureUpdateAction.NEVER });
     api.history.clear();
     setDirty(false);
   };
@@ -226,13 +230,14 @@ export function SceneViewer({
             <Excalidraw
               excalidrawAPI={setApi}
               initialData={{
-                elements: scene.elements,
+                elements: initialElements ?? [],
                 appState: { ...scene.appState, theme },
                 files: scene.files,
                 scrollToContent: true,
               }}
               viewModeEnabled={!editing}
               theme={theme}
+              validateEmbeddable={false}
               name={source.fileName.replace(/\.[^.]+$/, "")}
               langCode={excalidrawLangCode}
               autoFocus={!embed}

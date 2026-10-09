@@ -5,6 +5,8 @@ import type { AppState, BinaryFiles, LibraryItem } from "@excalidraw/excalidraw/
 import { base64ToBytes, type FileKind, mimeForKind } from "../shared/files";
 import { commonBounds, type ElementLike } from "../shared/geometry";
 import { extractObsidianScene } from "../shared/obsidian";
+import { neutralizeElements } from "../shared/sanitize";
+import { t } from "../shared/i18n";
 import type { FileContent } from "../shared/protocol";
 
 export interface LoadedScene {
@@ -33,15 +35,15 @@ function restoreSceneJson(text: string): LoadedScene {
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error("This file is not valid JSON, so it cannot be an Excalidraw drawing.");
+    throw new Error(t("errNotJson"));
   }
-  if (!data || typeof data !== "object") throw new Error("Unrecognised Excalidraw file.");
+  if (!data || typeof data !== "object") throw new Error(t("errUnrecognised"));
   const obj = data as Record<string, unknown>;
   if (obj.type === "excalidrawlib" || Array.isArray(obj.library) || Array.isArray(obj.libraryItems)) {
     return libraryToScene(restoreLibraryItems((obj.libraryItems ?? obj.library) as never, "published"));
   }
   if (!Array.isArray(obj.elements)) {
-    throw new Error("This JSON file does not contain an Excalidraw scene (no “elements” array).");
+    throw new Error(t("errNoElements"));
   }
   const restored = restore(
     {
@@ -56,7 +58,13 @@ function restoreSceneJson(text: string): LoadedScene {
   return { elements: restored.elements, appState: restored.appState, files: restored.files };
 }
 
+/** Parse a file into a scene, with embedded web content neutralised (see sanitize.ts). */
 export async function loadScene(kind: FileKind, content: FileContent): Promise<LoadedScene> {
+  const scene = await parseScene(kind, content);
+  return { ...scene, elements: neutralizeElements(scene.elements) };
+}
+
+async function parseScene(kind: FileKind, content: FileContent): Promise<LoadedScene> {
   switch (kind) {
     case "excalidraw":
       return restoreSceneJson(contentToText(content));
@@ -75,10 +83,7 @@ export async function loadScene(kind: FileKind, content: FileContent): Promise<L
         return { elements: scene.elements, appState: scene.appState, files: scene.files };
       } catch (err) {
         const reason = err instanceof Error && err.message ? ` (${err.message})` : "";
-        throw new Error(
-          `This image does not contain an embedded Excalidraw scene${reason}. ` +
-            "Export from Excalidraw with “Embed scene” enabled to make it previewable.",
-        );
+        throw new Error(t("errNoEmbeddedScene", { reason }));
       }
     }
   }

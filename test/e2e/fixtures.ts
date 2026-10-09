@@ -46,7 +46,11 @@ export const test = base.extend<Fixtures>({
   },
   extensionId: async ({ context }, use) => {
     let [worker] = context.serviceWorkers();
-    worker ??= await context.waitForEvent("serviceworker");
+    worker ??= await context.waitForEvent("serviceworker", { timeout: 10_000 }).catch(() => {
+      throw new Error(
+        `The extension in ${DIST} did not load — check manifest.json (e.g. a CSP Chrome rejects).`,
+      );
+    });
     await use(new URL(worker.url()).host);
   },
   page: async ({ context }, use) => {

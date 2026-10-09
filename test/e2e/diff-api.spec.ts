@@ -68,3 +68,28 @@ test("PR page without SHAs in the DOM resolves the range through the REST API", 
   await expect(viewer.locator(".xv-diffstat__added")).toHaveText("+4");
   expect(apiCalls).toEqual([`${API}/pulls/1`, `${API}/compare/${BASE_TIP}...${HEAD}`]);
 });
+
+test("when no commits can be found, branch tips are compared and the viewer says so", async ({
+  page,
+  context,
+}) => {
+  // Classic PR page with every commit SHA scrubbed: only the base/head branch names remain.
+  const html = fixture("github/pr-files-full.html").replace(/[0-9a-f]{40}/g, "");
+  await routeGitHub(context, {
+    [PR]: { body: html, contentType: "text/html" },
+    [`${REPO}/raw/main/${PATH}`]: {
+      body: fixture("github/how-it-works.base.excalidraw"),
+      contentType: "text/plain",
+    },
+    [`${REPO}/raw/claude/eloquent-babbage-6mkmev/${PATH}`]: {
+      body: fixture("github/how-it-works.head.excalidraw"),
+      contentType: "text/plain",
+    },
+  });
+  await context.route("https://api.github.com/**", (route) => route.fulfill({ status: 404, json: {} }));
+  await page.goto(PR);
+  const button = page.locator(`[data-xgp="diff-button"][data-xgp-path="${PATH}"]`);
+  const [viewer] = await Promise.all([context.waitForEvent("page"), button.click()]);
+  await expect(viewer.locator(".xv-banner")).toContainText("latest versions of the branches");
+  await expect(viewer.locator(".xv-diffstat__added")).toHaveText("+4");
+});

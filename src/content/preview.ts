@@ -36,6 +36,12 @@ export interface FilePreviewOptions {
   settings: () => Settings;
 }
 
+/** Height chosen by resizing in this tab; settings are saved with a delay. */
+let sessionHeight: number | null = null;
+
+/** Plain images are downloaded just to check for a scene; skip huge ones. */
+const SNIFF_MAX_BYTES = 15 * 1024 * 1024;
+
 function viewerUrl(params: Record<string, string>): string {
   return chrome.runtime.getURL(`viewer.html?${new URLSearchParams(params).toString()}`);
 }
@@ -59,6 +65,8 @@ export class FilePreview {
   /** null while a plain .svg/.png is being checked for an embedded scene. */
   previewable: boolean | null;
   private content: Promise<FetchResult> | null = null;
+  /** Payload id in the service worker store for the current download, reused by re-opens. */
+  private stored: { result: FetchResult; id: Promise<string> } | null = null;
   private actions: HTMLElement | null = null;
   private inline: HTMLElement | null = null;
   private hidden: HTMLElement | null = null;
@@ -69,17 +77,17 @@ export class FilePreview {
   }
 
   /** Download the file once; failures can be retried. */
-  load(): Promise<FetchResult> {
+  load(maxBytes?: number): Promise<FetchResult> {
     if (!this.content) {
       const promise = (async (): Promise<FetchResult> => {
         const url = this.opts.rawUrl();
         const binary = isBinaryKind(this.opts.kind);
-        const result = url ? await fetchContent(url, binary) : null;
+        const result = url ? await fetchContent(url, binary, maxBytes) : null;
         if (result?.ok) return result;
         const text = binary ? null : (this.opts.fallbackText?.() ?? null);
         if (text !== null)
           return { ok: true, content: { encoding: "text", data: text }, finalUrl: location.href };
-        return result ?? { ok: false, status: 0, error: "No download link for this file" };
+        return result ?? { ok: false, status: 0, error: t("noDownloadLink") };
       })();
       this.content = promise;
       void promise.then((r) => {
@@ -93,10 +101,25 @@ export class FilePreview {
   async sniff(): Promise<boolean> {
     if (this.previewable !== null) return this.previewable;
     this.previewable = false; // don't start a second check meanwhile
-    const r = await this.load();
+    const r = await this.load(SNIFF_MAX_BYTES);
     // Text (SVG) or base64 (PNG); hasEmbeddedScene understands both.
     this.previewable = r.ok && hasEmbeddedScene(this.opts.kind, r.content.data);
     return this.previewable;
+  }
+
+  /** Store the payload once per download (re-opening the inline preview reuses it). */
+  private storeId(result: Extract<FetchResult, { ok: true }>): Promise<string> {
+    if (this.stored?.result !== result) {
+      const id = sendToBackground({ type: "xgp:store", payload: this.payload(result) }).then((res) => {
+        if (!res.ok) throw new Error(res.error);
+        return res.id;
+      });
+      this.stored = { result, id };
+      id.catch(() => {
+        if (this.stored?.id === id) this.stored = null;
+      });
+    }
+    return this.stored.id;
   }
 
   private payload(result: Extract<FetchResult, { ok: true }>): ViewPayload {
@@ -183,12 +206,16 @@ export class FilePreview {
     this.syncInlineButton();
 
     const settings = this.opts.settings();
+    const height = sessionHeight ?? settings.inlineHeight;
     const status = h("div", { class: "xgp-inline__status" }, t("loading"));
     const handle = h("div", {
       class: "xgp-inline__resize",
       role: "separator",
       "aria-orientation": "horizontal",
       "aria-label": t("resizePreview"),
+      "aria-valuemin": String(INLINE_HEIGHT_MIN),
+      "aria-valuemax": String(INLINE_HEIGHT_MAX),
+      "aria-valuenow": String(height),
       tabindex: "0",
     });
     const container = h(
@@ -197,7 +224,7 @@ export class FilePreview {
         class: "xgp-inline",
         [MARK]: "inline",
         "data-xgp-key": this.opts.key,
-        style: `height:${settings.inlineHeight}px;margin-top:${getComputedStyle(body).marginTop}`,
+        style: `height:${height}px;margin-top:${getComputedStyle(body).marginTop}`,
       },
       status,
       handle,
@@ -209,28 +236,34 @@ export class FilePreview {
     this.hidden = body;
 
     const stillOpen = () => this.inlineOpen && this.inline === container && container.isConnected;
-    const result = await this.load();
-    if (!stillOpen()) return;
-    if (!result.ok) {
-      status.textContent = `${t("errorTitle")}: ${result.error}`;
+    const fail = (message: string) => {
+      status.textContent = `${t("errorTitle")}: ${message}`;
       status.classList.add("xgp-inline__status--error");
-      return;
+    };
+    try {
+      const result = await this.load();
+      if (!stillOpen()) return;
+      if (!result.ok) return fail(result.error);
+      const id = await this.storeId(result);
+      if (!stillOpen()) return;
+      const reload = this.opts.fallbackViewerUrl ?? this.opts.rawUrl();
+      const frame = h("iframe", {
+        class: "xgp-inline__frame",
+        src: viewerUrl({
+          id,
+          embed: "1",
+          theme: viewerTheme(this.opts.settings()),
+          ...(reload ? { url: reload } : {}),
+        }),
+        title: `${t("inlineFrameTitle")}: ${this.opts.fileName}`,
+        allow: "clipboard-write; fullscreen",
+      });
+      frame.addEventListener("load", () => status.remove(), { once: true });
+      container.prepend(frame);
+    } catch (err) {
+      // e.g. "Extension context invalidated" after the extension was updated.
+      if (stillOpen()) fail(err instanceof Error ? err.message : String(err));
     }
-    const stored = await sendToBackground({ type: "xgp:store", payload: this.payload(result) });
-    if (!stillOpen()) return;
-    if (!stored.ok) {
-      status.textContent = stored.error;
-      status.classList.add("xgp-inline__status--error");
-      return;
-    }
-    const frame = h("iframe", {
-      class: "xgp-inline__frame",
-      src: viewerUrl({ id: stored.id, embed: "1", theme: viewerTheme(this.opts.settings()) }),
-      title: `${t("inlineFrameTitle")}: ${this.opts.fileName}`,
-      allow: "clipboard-write; fullscreen",
-    });
-    frame.addEventListener("load", () => status.remove(), { once: true });
-    container.prepend(frame);
   }
 
   closeInline(): void {
@@ -266,17 +299,28 @@ export class FilePreview {
 function makeResizable(container: HTMLElement, handle: HTMLElement) {
   let startY = 0;
   let startH = 0;
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
   const clamp = (v: number) => Math.round(Math.min(INLINE_HEIGHT_MAX, Math.max(INLINE_HEIGHT_MIN, v)));
-  const onMove = (e: PointerEvent) => {
-    container.style.height = `${clamp(startH + e.clientY - startY)}px`;
+  const setHeight = (px: number) => {
+    sessionHeight = px;
+    container.style.height = `${px}px`;
+    handle.setAttribute("aria-valuenow", String(px));
   };
+  // storage.sync allows ~120 writes a minute: save once the user stops resizing.
+  const save = (px: number) => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => void saveSettings({ inlineHeight: px }).catch(() => undefined), 400);
+  };
+  const onMove = (e: PointerEvent) => setHeight(clamp(startH + e.clientY - startY));
   const onUp = (e: PointerEvent) => {
     container.classList.remove("xgp-inline--resizing");
     handle.removeEventListener("pointermove", onMove);
     handle.removeEventListener("pointerup", onUp);
     handle.removeEventListener("pointercancel", onUp);
     if (handle.hasPointerCapture(e.pointerId)) handle.releasePointerCapture(e.pointerId);
-    void saveSettings({ inlineHeight: container.getBoundingClientRect().height });
+    const px = clamp(container.getBoundingClientRect().height);
+    sessionHeight = px;
+    save(px);
   };
   handle.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
@@ -294,8 +338,8 @@ function makeResizable(container: HTMLElement, handle: HTMLElement) {
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
     e.preventDefault();
     const next = clamp(container.getBoundingClientRect().height + (e.key === "ArrowDown" ? 40 : -40));
-    container.style.height = `${next}px`;
-    void saveSettings({ inlineHeight: next });
+    setHeight(next);
+    save(next);
   });
 }
 

@@ -5,7 +5,15 @@
  * (`DiffFileHeader-module__diff-file-header`).
  */
 import { detectKind, fileNameOf, isBinaryKind, needsSniff, type FileKind } from "../shared/files";
-import { parseCompareRange, rawUrl, shortSha, blobUrl, type PageType, type RepoRef } from "../shared/github";
+import {
+  blobUrl,
+  parseCompareRange,
+  parseCompareSide,
+  rawUrl,
+  shortSha,
+  type PageType,
+  type RepoRef,
+} from "../shared/github";
 import { t } from "../shared/i18n";
 import { sendToBackground, type DiffPayload, type DiffSide, type FileContent } from "../shared/protocol";
 import type { Settings } from "../shared/settings";
@@ -102,6 +110,8 @@ export interface Range {
   files?: Map<string, { oldPath?: string; oldOid?: string; newOid?: string }>;
   /** Repository the head commit lives in, when it differs (pull requests from forks). */
   headRepo?: RepoRef;
+  /** Guessed from branch names: may differ from the commits GitHub's diff uses. */
+  approximate?: boolean;
 }
 
 async function apiJson(path: string): Promise<Record<string, unknown> | null> {
@@ -143,6 +153,8 @@ async function rangeFromApi(page: Extract<DiffPage, { type: "pull" | "compare" }
     const range = parseCompareRange(page.range);
     if (!range) return null;
     [baseRef, headRef] = [range.base, range.head];
+    const headSide = parseCompareSide(range.head, repo);
+    if (headSide.repo.owner !== repo.owner || headSide.repo.repo !== repo.repo) headRepo = headSide.repo;
   }
   // The diff is against the merge base, not the tip of the base branch.
   const cmp = await apiJson(
@@ -311,17 +323,35 @@ async function resolveRange(page: DiffPage): Promise<Range> {
     return fromApi;
   }
 
+  // Last resort: branch tips rather than the exact commits; the viewer says so.
   if (page.type === "compare") {
     const range = parseCompareRange(page.range);
     if (range) {
-      return { repo, base: range.base, head: range.head, baseLabel: range.base, headLabel: range.head };
+      const b = parseCompareSide(range.base, repo);
+      const hd = parseCompareSide(range.head, repo);
+      return {
+        repo: b.repo,
+        base: b.ref,
+        head: hd.ref,
+        headRepo: hd.repo,
+        baseLabel: range.base,
+        headLabel: range.head,
+        approximate: true,
+      };
     }
   }
   if (refs.base && refs.head) {
-    // Branch tips rather than the exact merge base, but close enough to compare.
-    return { repo, base: refs.base, head: refs.head, baseLabel: refs.base, headLabel: refs.head };
+    return {
+      repo,
+      base: refs.base,
+      head: refs.head,
+      headRepo: refs.headRepo,
+      baseLabel: refs.base,
+      headLabel: refs.head,
+      approximate: true,
+    };
   }
-  throw new Error("Could not find which commits this diff compares.");
+  throw new Error(t("diffRangeUnknown"));
 }
 
 // --- Fetching both versions -------------------------------------------------------
@@ -348,11 +378,11 @@ function headFromViewFile(href: string | null): { repo: RepoRef; sha: string } |
 function pageTitle(page: DiffPage): string {
   switch (page.type) {
     case "pull":
-      return `PR #${page.number}`;
+      return t("prTitle", { n: page.number });
     case "commit":
-      return `Commit ${shortSha(page.sha)}`;
+      return t("commitTitle", { sha: shortSha(page.sha) });
     case "compare":
-      return `Compare ${page.range}`;
+      return t("compareTitle", { range: page.range });
   }
 }
 
@@ -400,6 +430,7 @@ async function openDiff(page: DiffPage, file: DiffFile, settings: Settings) {
     base: side(range.repo, baseRef, oldPath, baseContent, range.baseLabel || shortSha(baseRef)),
     head: side(headRepo, headRef, file.path, headContent, range.headLabel || shortSha(headRef)),
     theme: viewerTheme(settings),
+    approximate: range.approximate,
   };
   const res = await sendToBackground({ type: "xgp:open", payload });
   if (!res.ok) throw new Error(res.error);
@@ -442,8 +473,24 @@ function pageKey(page: DiffPage): string {
   return `${page.type}:${page.owner}/${page.repo}:${id}`;
 }
 
-export function updateDiff(page: PageType, settings: Settings) {
+/** Scanning a large diff is not free; GitHub's React diff view mutates while scrolling. */
+const SCAN_INTERVAL_MS = 150;
+let lastScan = -Infinity;
+let pendingScan: ReturnType<typeof setTimeout> | undefined;
+let mounted = false;
+
+export function updateDiff(page: PageType, settings: Settings, requestUpdate: () => void) {
   if (page.type !== "pull" && page.type !== "commit" && page.type !== "compare") return;
+  const wait = lastScan + SCAN_INTERVAL_MS - performance.now();
+  if (wait > 0) {
+    // Run once more after the burst, with fresh page state.
+    pendingScan ??= setTimeout(() => {
+      pendingScan = undefined;
+      requestUpdate();
+    }, wait);
+    return;
+  }
+  lastScan = performance.now();
   const key = pageKey(page);
   for (const file of [...findClassicFiles(), ...findReactFiles()]) {
     const kind = detectKind(file.path);
@@ -454,9 +501,12 @@ export function updateDiff(page: PageType, settings: Settings) {
     const btn = diffButton(page, file, settings);
     btn.dataset.xgpPage = key;
     file.slot.insertBefore(btn, file.before?.parentElement === file.slot ? file.before : null);
+    mounted = true;
   }
 }
 
 export function teardownDiff() {
+  if (!mounted) return;
+  mounted = false;
   document.querySelectorAll(`[${MARK}="diff-button"]`).forEach((n) => n.remove());
 }

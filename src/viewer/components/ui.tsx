@@ -52,6 +52,7 @@ export interface MenuItem {
 export function Menu({ label, icon, items }: { label: string; icon?: ReactNode; items: MenuItem[] }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const itemsRef = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
@@ -60,7 +61,10 @@ export function Menu({ label, icon, items }: { label: string; icon?: ReactNode; 
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     };
     document.addEventListener("pointerdown", onDown, true);
     document.addEventListener("keydown", onKey, true);
@@ -83,6 +87,7 @@ export function Menu({ label, icon, items }: { label: string; icon?: ReactNode; 
   return (
     <div className="xv-menu" ref={rootRef}>
       <button
+        ref={triggerRef}
         type="button"
         className="xv-btn xv-btn--default"
         aria-haspopup="menu"
@@ -106,6 +111,7 @@ export function Menu({ label, icon, items }: { label: string; icon?: ReactNode; 
               className="xv-menu__item"
               onClick={() => {
                 setOpen(false);
+                triggerRef.current?.focus();
                 item.onSelect();
               }}
             >

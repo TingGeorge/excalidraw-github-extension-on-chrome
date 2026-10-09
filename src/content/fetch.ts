@@ -7,9 +7,10 @@ import { sendToBackground, type FetchResult } from "../shared/protocol";
  * work; if that fails (e.g. CORS on an unusual redirect) the service worker
  * tries with its host permissions.
  */
-export async function fetchContent(url: string, binary: boolean): Promise<FetchResult> {
-  const direct = await fetchFileContent(url, binary, "same-origin");
-  if (direct.ok || direct.status === 404) return direct;
+export async function fetchContent(url: string, binary: boolean, maxBytes?: number): Promise<FetchResult> {
+  const direct = await fetchFileContent(url, binary, "same-origin", maxBytes);
+  // Missing or too large: asking again through the service worker won't help.
+  if (direct.ok || direct.status === 404 || direct.status === 413) return direct;
   try {
     const viaBackground = await sendToBackground({ type: "xgp:fetch", url, binary });
     return viaBackground.ok ? viaBackground : direct;

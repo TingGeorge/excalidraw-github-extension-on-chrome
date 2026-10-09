@@ -43,16 +43,20 @@ export function isBinaryKind(kind: FileKind): boolean {
   return kind === "png" || kind === "excalidraw-png";
 }
 
+/**
+ * Last segment of a path. Paths may be URL-encoded (`a%20b.excalidraw`) or
+ * already decoded; `#` and `?` are legal in file names, so pass a URL's
+ * `pathname` (not the whole URL) when the input comes from a link.
+ */
 export function fileNameOf(path: string): string {
-  const clean = path.split(/[?#]/)[0] ?? "";
-  const parts = clean.split("/");
-  let name = parts[parts.length - 1] ?? "";
+  const parts = path.split("/");
+  const name = parts[parts.length - 1] ?? "";
+  if (!/%[0-9a-f]{2}/i.test(name)) return name;
   try {
-    name = decodeURIComponent(name);
+    return decodeURIComponent(name);
   } catch {
-    // keep the raw segment
+    return name; // a literal "%" in the name
   }
-  return name;
 }
 
 export const EXCALIDRAW_MIME = "application/vnd.excalidraw+json";
