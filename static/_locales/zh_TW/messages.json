@@ -1,0 +1,11 @@
+{
+  "extName": {
+    "message": "Excalidraw Preview for GitHub"
+  },
+  "extDescription": {
+    "message": "在 GitHub 上直接預覽 Excalidraw 圖：用新分頁或內嵌方式把 .excalidraw 檔案顯示成圖，也能在 PR 中並排比較變更。"
+  },
+  "contextMenuPreview": {
+    "message": "預覽 Excalidraw 圖"
+  }
+}
