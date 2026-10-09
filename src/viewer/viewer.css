@@ -493,6 +493,7 @@ a.xv-title__name:hover {
 }
 
 .xv-diffstat {
+  flex-shrink: 0;
   display: inline-flex;
   gap: 6px;
   font-weight: 600;
@@ -573,22 +574,28 @@ a.xv-title__name:hover {
 }
 
 .xv-dot {
+  align-self: flex-start;
+  margin-top: 6px;
   flex: none;
   width: 8px;
   height: 8px;
   border-radius: 50%;
 }
 
-.xv-changes__label {
+.xv-changes__text {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-width: 0;
+}
+
+.xv-changes__label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.xv-changes__kind {
-  flex: none;
+.xv-changes__meta {
   font-size: 11px;
   color: var(--xv-fg-muted);
 }
@@ -641,5 +648,45 @@ a.xv-title__name:hover {
   .xv-spinner,
   .xv-toast {
     animation: none;
+  }
+}
+
+/* Diff panes are narrow enough for Excalidraw's mobile layout; its bottom bar
+   only holds the main menu there, which the header already covers. */
+.xv-pane__canvas .App-bottom-bar {
+  display: none;
+}
+
+.xv-zoom {
+  display: inline-flex;
+}
+
+.xv-zoom > .xv-btn {
+  border-radius: 0;
+}
+
+.xv-zoom > .xv-btn + .xv-btn {
+  margin-left: -1px;
+}
+
+.xv-zoom > .xv-btn:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.xv-zoom > .xv-btn:last-child {
+  border-radius: 0 6px 6px 0;
+}
+
+.xv-zoom__value {
+  min-width: 52px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 860px) {
+  .xv-app--diff .xv-header__actions .xv-btn:not(.xv-btn--icon) > span {
+    display: none;
+  }
+  .xv-zoom__value {
+    display: none;
   }
 }

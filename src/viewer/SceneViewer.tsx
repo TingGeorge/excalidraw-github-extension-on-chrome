@@ -21,8 +21,9 @@ import { copyPng, exportExcalidraw, exportPng, exportSvg } from "./export";
 import { loadScene, type LoadedScene } from "./scene";
 import { useEmbedInteraction } from "./useEmbed";
 
-export function fitScene(api: ExcalidrawImperativeAPI, animate = false): void {
-  api.scrollToContent(undefined, { fitToViewport: true, viewportZoomFactor: 0.9, maxZoom: 1, animate });
+/** Zoom so the whole drawing is visible; libraries (small shapes in a grid) may zoom in a little. */
+export function fitScene(api: ExcalidrawImperativeAPI, animate = false, maxZoom = 1): void {
+  api.scrollToContent(undefined, { fitToViewport: true, viewportZoomFactor: 0.9, maxZoom, animate });
 }
 
 export function SceneViewer({
@@ -65,12 +66,26 @@ export function SceneViewer({
     document.title = `${source.fileName} · Excalidraw Preview`;
   }, [source.fileName]);
 
-  // Fit once the canvas has its final size.
+  /** Set once the user pans or zooms; until then resizes (e.g. of the inline frame) refit. */
+  const userMoved = useRef(false);
+  const maxZoom = scene?.libraryItemCount ? 1.5 : 1;
+
+  // Fit once the canvas has its final size, and again on resize until the user moves the view.
   useEffect(() => {
     if (!api || !scene) return;
-    const raf = requestAnimationFrame(() => fitScene(api));
-    return () => cancelAnimationFrame(raf);
-  }, [api, scene]);
+    let raf = requestAnimationFrame(() => fitScene(api, false, maxZoom));
+    const onResize = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (!userMoved.current) fitScene(api, false, maxZoom);
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      cancelAnimationFrame(raf);
+    };
+  }, [api, scene, maxZoom]);
 
   const run = useCallback(
     async (action: () => Promise<void> | void, success: string) => {
@@ -142,7 +157,7 @@ export function SceneViewer({
 
   const actions = (
     <>
-      {editing && dirty && <Button variant="invisible" label={t("discardEdits")} onClick={discardEdits} />}
+      {dirty && <Button variant="invisible" label={t("discardEdits")} onClick={discardEdits} />}
       {!embed && (
         <Button
           icon={editing ? <CheckIcon /> : <PencilIcon />}
@@ -158,7 +173,11 @@ export function SceneViewer({
         icon={<FitIcon />}
         label={t("fitToContent")}
         disabled={!api}
-        onClick={() => api && fitScene(api, true)}
+        onClick={() => {
+          if (!api) return;
+          userMoved.current = false;
+          fitScene(api, true, maxZoom);
+        }}
       />
       {exportItems.length > 0 && <Menu label={t("export")} icon={<DownloadIcon />} items={exportItems} />}
       {themeToggle}
@@ -187,8 +206,13 @@ export function SceneViewer({
   return (
     <div className={`xv-app${embed ? " xv-app--embed" : ""}`}>
       <Header compact={embed} title={<SourceTitle source={source} extra={libraryNote} />} actions={actions} />
-      {editing && dirty && <div className="xv-banner">{t("localEdits")}</div>}
-      <main className="xv-canvas" data-testid="xv-canvas">
+      {dirty && <div className="xv-banner">{t("localEdits")}</div>}
+      <main
+        className="xv-canvas"
+        data-testid="xv-canvas"
+        onPointerDownCapture={() => (userMoved.current = true)}
+        onWheelCapture={() => (userMoved.current = true)}
+      >
         {error ? (
           <div className="xv-center xv-error" role="alert">
             <AlertIcon size={24} />
@@ -215,8 +239,9 @@ export function SceneViewer({
               handleKeyboardGlobally={!embed}
               detectScroll={false}
               onChange={(elements) => {
-                if (editing && initialVersion.current !== null) {
-                  setDirty(getSceneVersion(elements) !== initialVersion.current);
+                if (initialVersion.current !== null) {
+                  const changed = getSceneVersion(elements) !== initialVersion.current;
+                  setDirty((d) => (d === changed ? d : changed));
                 }
               }}
               UIOptions={{

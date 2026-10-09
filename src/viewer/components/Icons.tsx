@@ -153,3 +153,15 @@ export const LinkIcon = (p: IconProps) => (
     <path d="M9.5 6.5a2.75 2.75 0 0 0-3.9 0l-2.1 2.1a2.75 2.75 0 0 0 3.9 3.9l.6-.6" />
   </Icon>
 );
+
+export const MinusIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3.5 8h9" />
+  </Icon>
+);
+
+export const PlusIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3.5 8h9M8 3.5v9" />
+  </Icon>
+);

@@ -155,7 +155,7 @@ function makeLabel(id: string, text: string, x: number, y: number, width: number
     text,
     originalText: text,
     fontSize: LABEL_SIZE,
-    fontFamily: 2,
+    fontFamily: 5,
     textAlign: "center",
     verticalAlign: "top",
     strokeColor: "#868e96",

@@ -115,11 +115,15 @@ export function parseShaBlobLink(
   };
 }
 
-/** Split a compare range like `main...feature` or `a1b2c3..d4e5f6`. */
+/** Split a compare range like `main...feature` or `a1b2c3..d4e5f6`. Both sides must be non-empty. */
 export function parseCompareRange(range: string): { base: string; head: string } | null {
-  const m = /^(.+?)(\.\.\.?)(.+)$/.exec(range);
-  if (!m) return null;
-  return { base: m[1]!, head: m[3]! };
+  for (const sep of ["...", ".."]) {
+    const i = range.indexOf(sep);
+    if (i <= 0) continue;
+    const head = range.slice(i + sep.length);
+    if (head && !head.startsWith(".")) return { base: range.slice(0, i), head };
+  }
+  return null;
 }
 
 export function shortSha(ref: string): string {

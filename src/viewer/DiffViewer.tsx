@@ -7,7 +7,17 @@ import { shortSha } from "../shared/github";
 import { excalidrawLangCode, t } from "../shared/i18n";
 import type { DiffPayload, DiffSide, Theme } from "../shared/protocol";
 import { Header } from "./components/Header";
-import { AlertIcon, ExternalIcon, FitIcon, LinkIcon, ListIcon, MoonIcon, SunIcon } from "./components/Icons";
+import {
+  AlertIcon,
+  ExternalIcon,
+  FitIcon,
+  LinkIcon,
+  ListIcon,
+  MinusIcon,
+  MoonIcon,
+  PlusIcon,
+  SunIcon,
+} from "./components/Icons";
 import { Button, Spinner } from "./components/ui";
 import { CHANGE_COLORS, highlightElements } from "./highlights";
 import { loadScene, type LoadedScene } from "./scene";
@@ -39,8 +49,16 @@ export function DiffViewer({
   const [highlight, setHighlight] = useState(true);
   const [sync, setSync] = useState(true);
   const [showList, setShowList] = useState(() => window.innerWidth > 900);
-  const apis = useRef<Partial<Record<Side, ExcalidrawImperativeAPI>>>({});
-  const [ready, setReady] = useState(0);
+  const [apis, setApis] = useState<Partial<Record<Side, ExcalidrawImperativeAPI>>>({});
+  // Stable callbacks: Excalidraw calls `excalidrawAPI` again whenever the prop changes.
+  const onBaseApi = useCallback(
+    (api: ExcalidrawImperativeAPI) => setApis((prev) => (prev.base === api ? prev : { ...prev, base: api })),
+    [],
+  );
+  const onHeadApi = useCallback(
+    (api: ExcalidrawImperativeAPI) => setApis((prev) => (prev.head === api ? prev : { ...prev, head: api })),
+    [],
+  );
   useEmbedInteraction(embed);
 
   useEffect(() => {
@@ -80,20 +98,35 @@ export function DiffViewer({
   // Re-render highlights when toggled.
   useEffect(() => {
     for (const side of ["base", "head"] as const) {
-      apis.current[side]?.updateScene({ elements: sceneFor(side), captureUpdate: CaptureUpdateAction.NEVER });
+      apis[side]?.updateScene({ elements: sceneFor(side), captureUpdate: CaptureUpdateAction.NEVER });
     }
-  }, [sceneFor]);
+  }, [sceneFor, apis]);
 
   const allElements = useMemo(
     () => [...(loaded?.base?.elements ?? []), ...(loaded?.head?.elements ?? [])].filter((e) => !e.isDeleted),
     [loaded],
   );
 
+  // Only the pane the user is interacting with drives the other one. Mirroring
+  // both ways makes the panes swap viewports forever: each one's getAppState()
+  // is stale while the other's update is still pending.
+  const driver = useRef<Side | null>(null);
+  /** Set once the user pans or zooms; until then window resizes refit the drawing. */
+  const userMoved = useRef(false);
+  const [zoomPct, setZoomPct] = useState(100);
+  const touch = (side: Side) => {
+    driver.current = side;
+    userMoved.current = true;
+  };
+
   const fitBoth = useCallback(
     (animate = false) => {
       if (allElements.length === 0) return;
+      // Both panes get the same target; no mirroring while they move there.
+      driver.current = null;
+      userMoved.current = false;
       for (const side of ["base", "head"] as const) {
-        apis.current[side]?.scrollToContent(allElements, {
+        apis[side]?.scrollToContent(allElements, {
           fitToViewport: true,
           viewportZoomFactor: 0.9,
           maxZoom: 1,
@@ -101,22 +134,63 @@ export function DiffViewer({
         });
       }
     },
-    [allElements],
+    [allElements, apis],
   );
 
   // Initial fit once both canvases exist.
   useEffect(() => {
     if (!loaded) return;
     const expected = (loaded.base ? 1 : 0) + (loaded.head ? 1 : 0);
-    if (ready < expected) return;
+    if (Object.keys(apis).length < expected) return;
     const raf = requestAnimationFrame(() => fitBoth());
     return () => cancelAnimationFrame(raf);
-  }, [ready, loaded, fitBoth]);
+  }, [apis, loaded, fitBoth]);
 
-  const onScroll = useCallback(
-    (from: Side) => (scrollX: number, scrollY: number, zoom: { value: number }) => {
-      if (!sync) return;
-      const other = apis.current[from === "base" ? "head" : "base"];
+  // Refit on window resize until the user has moved the view themselves.
+  useEffect(() => {
+    let raf = 0;
+    const onResize = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (!userMoved.current) fitBoth();
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      cancelAnimationFrame(raf);
+    };
+  }, [fitBoth]);
+
+  /** Zoom both panes around their centre (factor, or null for 100%). */
+  const zoomBoth = (factor: number | null) => {
+    driver.current = null;
+    userMoved.current = true;
+    for (const side of ["base", "head"] as const) {
+      const api = apis[side];
+      if (!api) continue;
+      const st = api.getAppState();
+      const z = st.zoom.value;
+      const next = Math.min(30, Math.max(0.1, factor === null ? 1 : z * factor));
+      const cx = st.width / 2;
+      const cy = st.height / 2;
+      api.updateScene({
+        appState: {
+          zoom: { value: next } as never,
+          scrollX: st.scrollX + cx / next - cx / z,
+          scrollY: st.scrollY + cy / next - cy / z,
+        },
+        captureUpdate: CaptureUpdateAction.NEVER,
+      });
+    }
+  };
+
+  const mirror = useCallback(
+    (from: Side, scrollX: number, scrollY: number, zoom: { value: number }) => {
+      const pct = Math.round(zoom.value * 100);
+      setZoomPct((p) => (p === pct ? p : pct));
+      if (!sync || driver.current !== from) return;
+      const other = apis[from === "base" ? "head" : "base"];
       if (!other) return;
       const st = other.getAppState();
       if (close(st.scrollX, scrollX) && close(st.scrollY, scrollY) && st.zoom.value === zoom.value) return;
@@ -125,18 +199,27 @@ export function DiffViewer({
         captureUpdate: CaptureUpdateAction.NEVER,
       });
     },
-    [sync],
+    [sync, apis],
+  );
+  const onBaseScroll = useCallback(
+    (x: number, y: number, zoom: { value: number }) => mirror("base", x, y, zoom),
+    [mirror],
+  );
+  const onHeadScroll = useCallback(
+    (x: number, y: number, zoom: { value: number }) => mirror("head", x, y, zoom),
+    [mirror],
   );
 
   const focusChange = (change: SceneChange<El>) => {
     const side: Side = change.after ? "head" : "base";
     const el = change.after ?? change.before;
-    const api = apis.current[side];
+    const api = apis[side];
     if (!api || !el) return;
+    touch(side);
     api.scrollToContent(el, { fitToViewport: true, viewportZoomFactor: 0.5, maxZoom: 2, animate: true });
   };
 
-  const counts = diff && bothSides && (
+  const counts = diff && (
     <span className="xv-diffstat">
       <span className="xv-diffstat__added">+{diff.added}</span>
       <span className="xv-diffstat__modified">~{diff.modified}</span>
@@ -157,8 +240,8 @@ export function DiffViewer({
       </a>
       <span className="xv-title__context">
         {payload.title} · {payload.base.label} → {payload.head.label}
-        {counts}
       </span>
+      {counts}
     </div>
   );
 
@@ -183,9 +266,23 @@ export function DiffViewer({
         icon={<ListIcon />}
         label={t("changes")}
         pressed={showList}
-        disabled={!bothSides}
         onClick={() => setShowList((s) => !s)}
       />
+      <div className="xv-zoom" role="group" aria-label={t("zoom")}>
+        <Button
+          showLabel={false}
+          icon={<MinusIcon />}
+          label={t("zoomOut")}
+          onClick={() => zoomBoth(1 / 1.2)}
+        />
+        <Button
+          className="xv-zoom__value"
+          label={`${zoomPct}%`}
+          title={t("zoomReset")}
+          onClick={() => zoomBoth(null)}
+        />
+        <Button showLabel={false} icon={<PlusIcon />} label={t("zoomIn")} onClick={() => zoomBoth(1.2)} />
+      </div>
       <Button showLabel={false} icon={<FitIcon />} label={t("fitToContent")} onClick={() => fitBoth(true)} />
       <Button
         variant="invisible"
@@ -214,7 +311,15 @@ export function DiffViewer({
     const scene = loaded?.[side];
     const label = side === "base" ? t("before") : t("after");
     return (
-      <section className={`xv-pane xv-pane--${side}`} aria-label={label} data-testid={`xv-pane-${side}`}>
+      <section
+        className={`xv-pane xv-pane--${side}`}
+        aria-label={label}
+        data-testid={`xv-pane-${side}`}
+        onPointerEnter={() => (driver.current = side)}
+        onPointerDownCapture={() => touch(side)}
+        onWheelCapture={() => touch(side)}
+        onFocusCapture={() => (driver.current = side)}
+      >
         <div className="xv-pane__label">
           <strong>{label}</strong>
           <span className="xv-muted" title={info.source.ref}>
@@ -227,10 +332,7 @@ export function DiffViewer({
         <div className="xv-pane__canvas">
           {scene ? (
             <Excalidraw
-              excalidrawAPI={(api) => {
-                apis.current[side] = api;
-                setReady((n) => n + 1);
-              }}
+              excalidrawAPI={side === "base" ? onBaseApi : onHeadApi}
               initialData={{
                 elements: sceneFor(side),
                 appState: { ...scene.appState, theme },
@@ -241,7 +343,7 @@ export function DiffViewer({
               theme={theme}
               langCode={excalidrawLangCode}
               detectScroll={false}
-              onScrollChange={onScroll(side)}
+              onScrollChange={side === "base" ? onBaseScroll : onHeadScroll}
               UIOptions={{
                 canvasActions: {
                   loadScene: false,
@@ -279,7 +381,7 @@ export function DiffViewer({
             {pane("base")}
             {pane("head")}
           </div>
-          {showList && bothSides && (
+          {showList && (
             <aside className="xv-changes" aria-label={t("changes")}>
               <h2>{t("changes")}</h2>
               {diff.changes.length === 0 ? (
@@ -288,15 +390,18 @@ export function DiffViewer({
                 <ul>
                   {diff.changes.map((change) => (
                     <li key={`${change.kind}-${change.id}`}>
-                      <button type="button" onClick={() => focusChange(change)}>
+                      <button type="button" title={change.label} onClick={() => focusChange(change)}>
                         <span
                           className="xv-dot"
                           style={{ background: CHANGE_COLORS[change.kind].stroke }}
                           aria-hidden="true"
                         />
-                        <span className="xv-changes__label">{change.label}</span>
-                        <span className={`xv-changes__kind xv-changes__kind--${change.kind}`}>
-                          {t(change.kind)}
+                        <span className="xv-changes__text">
+                          <span className="xv-changes__label">{change.text || change.type}</span>
+                          <span className="xv-changes__meta">
+                            {change.text ? `${change.type} · ` : ""}
+                            {t(change.kind)}
+                          </span>
                         </span>
                       </button>
                     </li>

@@ -5,6 +5,8 @@ import { elementBounds, type ElementLike } from "../shared/geometry";
 
 export const HIGHLIGHT_PREFIX = "xgp-diff-";
 const PADDING = 10;
+/** Thin elements (straight arrows, lines) still get a box you can see. */
+const MIN_SIZE = 28;
 
 export const CHANGE_COLORS: Record<ChangeKind, { stroke: string; fill: string }> = {
   added: { stroke: "#1a7f37", fill: "#2da44e26" },
@@ -24,7 +26,9 @@ export function highlightElements(
   const skeletons = changes.flatMap((change) => {
     const el = side === "base" ? change.before : change.after;
     if (!el) return [];
-    const [x1, y1, x2, y2] = elementBounds(el);
+    let [x1, y1, x2, y2] = elementBounds(el);
+    if (x2 - x1 < MIN_SIZE) [x1, x2] = [(x1 + x2 - MIN_SIZE) / 2, (x1 + x2 + MIN_SIZE) / 2];
+    if (y2 - y1 < MIN_SIZE) [y1, y2] = [(y1 + y2 - MIN_SIZE) / 2, (y1 + y2 + MIN_SIZE) / 2];
     const colors = CHANGE_COLORS[change.kind];
     return [
       {
@@ -32,8 +36,8 @@ export function highlightElements(
         id: `${HIGHLIGHT_PREFIX}${change.id}`,
         x: x1 - PADDING,
         y: y1 - PADDING,
-        width: Math.max(x2 - x1, 1) + PADDING * 2,
-        height: Math.max(y2 - y1, 1) + PADDING * 2,
+        width: x2 - x1 + PADDING * 2,
+        height: y2 - y1 + PADDING * 2,
         strokeColor: colors.stroke,
         backgroundColor: colors.fill,
         fillStyle: "solid" as const,

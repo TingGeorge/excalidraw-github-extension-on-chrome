@@ -22,14 +22,19 @@ interface Fixtures {
 }
 
 export const test = base.extend<Fixtures>({
-  // eslint-disable-next-line no-empty-pattern
-  context: async ({}, use) => {
+  context: async ({ locale, colorScheme, deviceScaleFactor }, use) => {
     const context = await chromium.launchPersistentContext("", {
       channel: "chromium",
       headless: !process.env.HEADED,
       viewport: { width: 1280, height: 860 },
-      locale: process.env.PW_LOCALE ?? "en-US",
-      args: [`--disable-extensions-except=${DIST}`, `--load-extension=${DIST}`],
+      locale: locale ?? "en-US",
+      colorScheme: colorScheme ?? "light",
+      deviceScaleFactor: deviceScaleFactor ?? 1,
+      args: [
+        `--disable-extensions-except=${DIST}`,
+        `--load-extension=${DIST}`,
+        `--lang=${locale ?? "en-US"}`,
+      ],
     });
     // Never talk to the real GitHub from tests; unrouted requests fail fast.
     await context.route(

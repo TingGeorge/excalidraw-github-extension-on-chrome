@@ -2,6 +2,18 @@ import { useEffect, useState } from "react";
 import type { EmbedScrollMessage } from "../shared/protocol";
 
 /**
+ * Excalidraw focuses its container on pointer down. Inside an iframe, a plain
+ * focus() also scrolls the GitHub page to bring the frame into view, so the page
+ * jumps when the user clicks the diagram. Default to `preventScroll` instead.
+ */
+export function preventFocusScroll(): void {
+  const focus = HTMLElement.prototype.focus;
+  HTMLElement.prototype.focus = function (options?: FocusOptions) {
+    focus.call(this, { preventScroll: true, ...options });
+  };
+}
+
+/**
  * Inline previews live in an iframe on github.com. Until the user clicks the
  * diagram, plain mouse-wheel scrolling should scroll the GitHub page instead of
  * panning the canvas; Ctrl/⌘ + wheel (and trackpad pinch) still zooms.

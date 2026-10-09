@@ -18,7 +18,13 @@ import {
   type FetchResult,
   type ViewPayload,
 } from "../shared/protocol";
-import { INLINE_HEIGHT_MAX, INLINE_HEIGHT_MIN, saveSettings, type Settings } from "../shared/settings";
+import {
+  DEFAULT_SETTINGS,
+  INLINE_HEIGHT_MAX,
+  INLINE_HEIGHT_MIN,
+  saveSettings,
+  type Settings,
+} from "../shared/settings";
 import { extensionOrigin, h, icon, ICONS, MARK } from "./dom";
 import { fetchContent } from "./fetch";
 import { viewerTheme } from "./theme";
@@ -36,6 +42,8 @@ interface BlobState {
 }
 
 let state: BlobState | null = null;
+/** Latest settings; read at click time so handlers never see stale values. */
+let settings: Settings = DEFAULT_SETTINGS;
 
 const SELECTORS = {
   rawButton: 'a[data-testid="raw-button"]',
@@ -102,18 +110,30 @@ function loadContent(s: BlobState): Promise<FetchResult> {
   return s.content;
 }
 
-function buildPayload(
-  s: BlobState,
-  result: Extract<FetchResult, { ok: true }>,
-  settings: Settings,
-): ViewPayload {
+/** Split `<ref>/<path>` using the breadcrumb's repository link (`/owner/repo/tree/<ref>`). */
+function splitRefAndPath(page: BlobUrl): { ref?: string; path: string } {
+  const link = document.querySelector<HTMLAnchorElement>('a[data-testid="breadcrumbs-repo-link"]');
+  const match = link ? /\/tree\/(.+)$/.exec(new URL(link.href, location.href).pathname) : null;
+  if (match) {
+    let ref = match[1]!;
+    try {
+      ref = decodeURIComponent(ref);
+    } catch {
+      // keep encoded
+    }
+    if (page.refAndPath.startsWith(`${ref}/`)) return { ref, path: page.refAndPath.slice(ref.length + 1) };
+  }
+  return { path: page.refAndPath };
+}
+
+function buildPayload(s: BlobState, result: Extract<FetchResult, { ok: true }>): ViewPayload {
   return {
     mode: "view",
     source: {
       htmlUrl: location.href.split("#")[0],
       rawUrl: rawUrl() ?? undefined,
       repo: `${s.page.owner}/${s.page.repo}`,
-      path: s.page.refAndPath,
+      ...splitRefAndPath(s.page),
       fileName: s.page.fileName,
       kind: s.kind,
     },
@@ -142,7 +162,7 @@ function setBusy(btn: HTMLButtonElement, busy: boolean) {
   btn.disabled = busy;
 }
 
-function buildActions(s: BlobState, settings: Settings): HTMLElement {
+function buildActions(s: BlobState): HTMLElement {
   const preview = button(t("preview"), t("previewTitle"), ICONS.external, "preview");
   const inline = button(t("inline"), t("inlineTitle"), ICONS.eye, "inline");
   inline.setAttribute("aria-pressed", String(s.inlineOpen));
@@ -166,7 +186,7 @@ function buildActions(s: BlobState, settings: Settings): HTMLElement {
         window.open(viewerUrlFor({ url: location.href.split("#")[0]! }), "_blank");
         return;
       }
-      const res = await sendToBackground({ type: "xgp:open", payload: buildPayload(s, result, settings) });
+      const res = await sendToBackground({ type: "xgp:open", payload: buildPayload(s, result) });
       if (!res.ok) showToast(res.error, "error");
     } catch (err) {
       showToast(err instanceof Error ? err.message : String(err), "error");
@@ -177,7 +197,7 @@ function buildActions(s: BlobState, settings: Settings): HTMLElement {
 
   inline.addEventListener("click", () => {
     if (s.inlineOpen) closeInline(s);
-    else void openInline(s, settings);
+    else void openInline(s);
   });
   return group;
 }
@@ -189,7 +209,7 @@ function syncInlineButton(s: BlobState) {
   btn.title = s.inlineOpen ? t("hideInlineTitle") : t("inlineTitle");
 }
 
-function injectButtons(s: BlobState, settings: Settings): boolean {
+function injectButtons(s: BlobState): boolean {
   const existing = document.querySelector<HTMLElement>(`[${MARK}="actions"]`);
   if (existing?.dataset.xgpHref === s.href && existing.isConnected) return true;
   existing?.remove();
@@ -198,13 +218,13 @@ function injectButtons(s: BlobState, settings: Settings): boolean {
   const group = raw?.closest<HTMLElement>('[data-component="ButtonGroup"]') ?? raw;
   const anchor = group ?? document.querySelector<HTMLElement>(SELECTORS.moreButton);
   if (!anchor?.parentElement) return false;
-  anchor.parentElement.insertBefore(buildActions(s, settings), anchor);
+  anchor.parentElement.insertBefore(buildActions(s), anchor);
   return true;
 }
 
 // --- Inline preview ----------------------------------------------------------
 
-async function openInline(s: BlobState, settings: Settings) {
+async function openInline(s: BlobState) {
   const section = blobSection();
   if (!section) return;
   s.inlineOpen = true;
@@ -241,7 +261,7 @@ async function openInline(s: BlobState, settings: Settings) {
     status.classList.add("xgp-inline__status--error");
     return;
   }
-  const stored = await sendToBackground({ type: "xgp:store", payload: buildPayload(s, result, settings) });
+  const stored = await sendToBackground({ type: "xgp:store", payload: buildPayload(s, result) });
   if (!s.inlineOpen || !container.isConnected) return;
   if (!stored.ok) {
     status.textContent = stored.error;
@@ -273,20 +293,25 @@ function makeResizable(container: HTMLElement, handle: HTMLElement) {
   const onMove = (e: PointerEvent) => {
     container.style.height = `${clamp(startH + e.clientY - startY)}px`;
   };
-  const onUp = () => {
+  const onUp = (e: PointerEvent) => {
     container.classList.remove("xgp-inline--resizing");
-    window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", onUp);
+    handle.removeEventListener("pointermove", onMove);
+    handle.removeEventListener("pointerup", onUp);
+    handle.removeEventListener("pointercancel", onUp);
+    if (handle.hasPointerCapture(e.pointerId)) handle.releasePointerCapture(e.pointerId);
     void saveSettings({ inlineHeight: container.getBoundingClientRect().height });
   };
   handle.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
     e.preventDefault();
     startY = e.clientY;
     startH = container.getBoundingClientRect().height;
-    // The iframe would swallow pointer events while dragging.
+    // Capture the pointer so moves over the iframe still reach us.
+    handle.setPointerCapture(e.pointerId);
     container.classList.add("xgp-inline--resizing");
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+    handle.addEventListener("pointercancel", onUp);
   });
   handle.addEventListener("keydown", (e) => {
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
@@ -313,7 +338,8 @@ export function teardownBlob() {
   state = null;
 }
 
-export function updateBlob(page: BlobUrl, settings: Settings) {
+export function updateBlob(page: BlobUrl, next: Settings) {
+  settings = next;
   const href = location.href.split("#")[0]!;
   if (state?.href !== href) {
     teardownBlob();
@@ -344,12 +370,12 @@ export function updateBlob(page: BlobUrl, settings: Settings) {
   }
   if (!s.previewable) return;
 
-  if (!injectButtons(s, settings)) return;
+  if (!injectButtons(s)) return;
 
   // React may re-render the file view and drop our inline container.
   if (s.inlineOpen && !document.querySelector(`[${MARK}="inline"]`)) {
     closeInline(s);
-    void openInline(s, settings);
+    void openInline(s);
   } else if (s.inlineOpen) {
     const section = blobSection();
     if (section && !section.hasAttribute("data-xgp-hidden")) section.setAttribute("data-xgp-hidden", "");
@@ -357,6 +383,6 @@ export function updateBlob(page: BlobUrl, settings: Settings) {
 
   if (settings.autoInline && !s.autoInlineDone && blobSection()) {
     s.autoInlineDone = true;
-    if (!s.inlineOpen) void openInline(s, settings);
+    if (!s.inlineOpen) void openInline(s);
   }
 }

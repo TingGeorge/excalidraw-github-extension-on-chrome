@@ -16,6 +16,8 @@ export interface SceneChange<T extends ElementLike = ElementLike> {
   after?: T;
   /** Human readable description, e.g. `rectangle "Viewer tab"`. */
   label: string;
+  /** Just the text part of the label (may be empty). */
+  text: string;
 }
 
 export interface SceneDiff<T extends ElementLike = ElementLike> {
@@ -63,20 +65,43 @@ export function visualSignature(el: ElementLike): string {
   return stableStringify(copy);
 }
 
-export function describeElement(
-  el: ElementLike & { text?: unknown },
-  all?: Map<string, ElementLike>,
-): string {
-  let text = typeof el.text === "string" ? el.text : "";
-  if (!text && all) {
-    // Containers show the text of their bound label.
-    const bound = (el as { boundElements?: Array<{ id: string; type: string }> | null }).boundElements;
-    const label = bound?.find((b) => b.type === "text");
-    const labelEl = label ? (all.get(label.id) as (ElementLike & { text?: unknown }) | undefined) : undefined;
-    if (labelEl && typeof labelEl.text === "string") text = labelEl.text;
+type Described = ElementLike & {
+  text?: unknown;
+  boundElements?: ReadonlyArray<{ id: string; type: string }> | null;
+  startBinding?: { elementId: string } | null;
+  endBinding?: { elementId: string } | null;
+};
+
+function ownText(el: Described, all?: Map<string, ElementLike>): string {
+  if (typeof el.text === "string" && el.text.trim()) return el.text;
+  // Containers (and labelled arrows) show the text of their bound label.
+  const label = el.boundElements?.find((b) => b.type === "text");
+  const labelEl = label ? (all?.get(label.id) as Described | undefined) : undefined;
+  return labelEl && typeof labelEl.text === "string" ? labelEl.text : "";
+}
+
+/**
+ * Short human readable text for an element: its own or its label's text, or for
+ * an unlabelled arrow the elements it connects ("Client → Server").
+ */
+export function elementText(el: Described, all?: Map<string, ElementLike>): string {
+  let text = ownText(el, all);
+  if (!text && all && (el.type === "arrow" || el.type === "line")) {
+    const name = (id: string | undefined) => {
+      const target = id ? (all.get(id) as Described | undefined) : undefined;
+      if (!target) return null;
+      return ownText(target, all).trim().split("\n")[0]!.trim() || target.type;
+    };
+    const from = name(el.startBinding?.elementId);
+    const to = name(el.endBinding?.elementId);
+    if (from || to) text = `${from ?? "…"} → ${to ?? "…"}`;
   }
   text = text.replace(/\s+/g, " ").trim();
-  if (text.length > 40) text = `${text.slice(0, 39)}…`;
+  return text.length > 40 ? `${text.slice(0, 39)}…` : text;
+}
+
+export function describeElement(el: Described, all?: Map<string, ElementLike>): string {
+  const text = elementText(el, all);
   return text ? `${el.type} “${text}”` : el.type;
 }
 
@@ -93,7 +118,14 @@ export function diffScenes<T extends ElementLike>(
   for (const [id, after] of head) {
     const before = base.get(id);
     if (!before) {
-      changes.push({ kind: "added", id, type: after.type, after, label: describeElement(after, head) });
+      changes.push({
+        kind: "added",
+        id,
+        type: after.type,
+        after,
+        label: describeElement(after, head),
+        text: elementText(after, head),
+      });
     } else if (visualSignature(before) !== visualSignature(after)) {
       changes.push({
         kind: "modified",
@@ -102,6 +134,7 @@ export function diffScenes<T extends ElementLike>(
         before,
         after,
         label: describeElement(after, head),
+        text: elementText(after, head),
       });
     } else {
       unchanged++;
@@ -109,7 +142,14 @@ export function diffScenes<T extends ElementLike>(
   }
   for (const [id, before] of base) {
     if (!head.has(id)) {
-      changes.push({ kind: "removed", id, type: before.type, before, label: describeElement(before, base) });
+      changes.push({
+        kind: "removed",
+        id,
+        type: before.type,
+        before,
+        label: describeElement(before, base),
+        text: elementText(before, base),
+      });
     }
   }
 
@@ -133,6 +173,7 @@ export function diffScenes<T extends ElementLike>(
           before: base.get(containerId),
           after: head.get(containerId),
           label: describeElement(head.get(containerId)!, head),
+          text: elementText(head.get(containerId)!, head),
         };
         byId.set(containerId, entry);
         folded.push(entry);

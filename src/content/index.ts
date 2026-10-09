@@ -24,7 +24,11 @@ const scheduleUpdate = rafThrottle(update);
 async function main() {
   settings = await loadSettings();
   onSettingsChanged((next) => {
+    const prev = settings;
     settings = next;
+    // The inline height is saved while resizing the open preview: keep it open.
+    const relevant = (s: Settings | null) => s && { ...s, inlineHeight: 0 };
+    if (JSON.stringify(relevant(prev)) === JSON.stringify(relevant(next))) return;
     // Re-create our UI with the new settings.
     teardownBlob();
     teardownDiff();
