@@ -24,6 +24,7 @@ uploaded anywhere.
   to the clipboard, or download it as a `.excalidraw` file.
 - **Local edits** — switch to edit mode to try something out and export it; changes are never written back
   to GitHub.
+- **Gists** — the same Preview / Inline buttons on every Excalidraw file of a gist.
 - **Right-click any link** to an Excalidraw file on GitHub → _Preview Excalidraw diagram_.
 - **Open local files** — drop a file onto the viewer (extension icon → _Open a local file…_).
 - Follows GitHub's light/dark theme; UI in English and 繁體中文.
@@ -72,6 +73,7 @@ Works in Chrome, Edge, Brave, Arc and other Chromium browsers (version 120+).
 | --------------------------------------------- | ------------------------------------------------------------------------------ |
 | A file page (`/blob/…`)                       | Click **Preview** to open a tab, or **Inline** to show the drawing on the page |
 | Pull request _Files changed_, commit, compare | Click **Preview diff** in the header of a changed Excalidraw file              |
+| A gist                                        | Click **Preview** or **Inline** next to the file's **Raw** button              |
 | Any link to an Excalidraw file                | Right-click → **Preview Excalidraw diagram**                                   |
 | Your computer                                 | Extension icon → **Open a local file…**, then drop or choose a file            |
 
@@ -84,7 +86,7 @@ and detection of scenes embedded in plain `.svg`/`.png` files.
 
 ## Privacy and permissions
 
-- **Read and change your data on github.com and githubusercontent.com** — to add the buttons and to download
+- **Read and change your data on github.com, gist.github.com and githubusercontent.com** — to add the buttons and to download
   the files you preview, using your existing GitHub session (that is what makes private repositories work).
 - **Storage** — your settings, and the file you are previewing (kept locally for up to 7 days so a reload of
   the viewer tab works).
@@ -128,7 +130,7 @@ request. Pushing a tag `v<version>` matching `package.json` publishes a GitHub r
 
 ### Known limitations
 
-- GitHub Enterprise Server (custom domains) and gist.github.com are not supported yet.
+- GitHub Enterprise Server (custom domains) is not supported yet.
 - Images referenced from an Obsidian drawing's _Embedded files_ section are not shown.
 - SVG exports embed full fonts instead of subsets (the font subsetter needs `eval`, which extensions may not
   use), so they are somewhat larger than exports from excalidraw.com.
@@ -150,7 +152,8 @@ JSON。可以開新分頁預覽、直接內嵌在檔案頁面，或在 Pull Requ
   新增／刪除／修改的元素會用顏色框起來，並列出可點擊的變更清單。
 - **匯出** PNG 或 SVG（內含場景資料，之後還能用 Excalidraw 繼續編輯）、複製到剪貼簿、下載成 `.excalidraw`。
 - **本機編輯**：切到編輯模式隨意修改、匯出；變更絕對不會寫回 GitHub。
-- 在任何 Excalidraw 檔案連結上**按右鍵** →「Preview Excalidraw diagram」。
+- **Gist**：gist 裡的每個 Excalidraw 檔案也有「預覽」和「內嵌」按鈕。
+- 在任何 Excalidraw 檔案連結上**按右鍵** →「預覽 Excalidraw 圖」。
 - **開啟本機檔案**：點擴充功能圖示 →「開啟本機檔案…」，把檔案拖進去即可。
 - 自動跟隨 GitHub 的淺色／深色主題；介面支援英文與繁體中文。
 
@@ -170,8 +173,8 @@ JSON。可以開新分頁預覽、直接內嵌在檔案頁面，或在 Pull Requ
 
 ### 隱私與權限
 
-- 讀取 github.com 與 githubusercontent.com：用來加上按鈕，並用你目前的 GitHub 登入狀態下載要預覽的檔案（所以私有 repo 也能用）。
+- 讀取 github.com、gist.github.com 與 githubusercontent.com：用來加上按鈕，並用你目前的 GitHub 登入狀態下載要預覽的檔案（所以私有 repo 也能用）。
 - 儲存空間：存放設定，以及正在預覽的檔案（只存在本機、最多 7 天，讓重新整理預覽分頁時還能顯示）。
-- 右鍵選單：提供「Preview Excalidraw diagram」。
+- 右鍵選單：提供「預覽 Excalidraw 圖」。
 
 沒有任何追蹤或分析，除了 GitHub 之外不會連到其他地方；Excalidraw 本體與字型都打包在擴充功能裡。

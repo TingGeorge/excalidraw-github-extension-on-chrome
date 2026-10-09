@@ -100,6 +100,62 @@ export interface Range {
   headLabel: string;
   /** Per-file overrides found in embedded data (exact blob versions, renames). */
   files?: Map<string, { oldPath?: string; oldOid?: string; newOid?: string }>;
+  /** Repository the head commit lives in, when it differs (pull requests from forks). */
+  headRepo?: RepoRef;
+}
+
+async function apiJson(path: string): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await fetch(`https://api.github.com${path}`, {
+      credentials: "omit",
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    return res.ok ? ((await res.json()) as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+type ApiRef = { sha?: string; ref?: string; repo?: { full_name?: string } | null };
+
+/**
+ * Ask GitHub's public REST API for the commits a pull request or compare view
+ * diffs. Only works for public repositories (no token), so it is a fallback.
+ */
+async function rangeFromApi(page: Extract<DiffPage, { type: "pull" | "compare" }>): Promise<Range | null> {
+  const repo = { owner: page.owner, repo: page.repo };
+  const base = `/repos/${encodeURIComponent(page.owner)}/${encodeURIComponent(page.repo)}`;
+  let baseRef: string;
+  let headRef: string;
+  let headSha: string | undefined;
+  let headRepo: RepoRef | undefined;
+  if (page.type === "pull") {
+    const pr = await apiJson(`${base}/pulls/${page.number}`);
+    const prBase = pr?.base as ApiRef | undefined;
+    const prHead = pr?.head as ApiRef | undefined;
+    if (!prBase?.sha || !prHead?.sha) return null;
+    baseRef = prBase.sha;
+    headRef = prHead.sha;
+    headSha = prHead.sha;
+    const [owner, name] = (prHead.repo?.full_name ?? "").split("/");
+    if (owner && name) headRepo = { owner, repo: name };
+  } else {
+    const range = parseCompareRange(page.range);
+    if (!range) return null;
+    [baseRef, headRef] = [range.base, range.head];
+  }
+  // The diff is against the merge base, not the tip of the base branch.
+  const cmp = await apiJson(
+    `${base}/compare/${encodeURIComponent(baseRef)}...${encodeURIComponent(headRef)}`,
+  );
+  const mergeBase = (cmp?.merge_base_commit as { sha?: string } | undefined)?.sha;
+  const commits = cmp?.commits as Array<{ sha?: string }> | undefined;
+  headSha ??=
+    commits && commits.length > 0 && commits.length < 250 ? commits[commits.length - 1]?.sha : undefined;
+  const baseSha = mergeBase ?? (page.type === "pull" ? baseRef : undefined);
+  if (!baseSha) return null;
+  const head = headSha ?? headRef;
+  return { repo, base: baseSha, head, baseLabel: shortSha(baseSha), headLabel: shortSha(head), headRepo };
 }
 
 const SHA = "[0-9a-f]{40}";
@@ -248,6 +304,13 @@ async function resolveRange(page: DiffPage): Promise<Range> {
     // fall through to ref names
   }
 
+  const fromApi = await rangeFromApi(page);
+  if (fromApi) {
+    if (refs.base) fromApi.baseLabel = label(fromApi.base, refs.base);
+    if (refs.head) fromApi.headLabel = label(fromApi.head, refs.head);
+    return fromApi;
+  }
+
   if (page.type === "compare") {
     const range = parseCompareRange(page.range);
     if (range) {
@@ -299,7 +362,7 @@ async function openDiff(page: DiffPage, file: DiffFile, settings: Settings) {
   const entry = range.files?.get(file.path);
   const oldPath = entry?.oldPath ?? file.oldPath;
   const view = file.deleted ? null : headFromViewFile(file.viewFileHref);
-  const headRepo = view?.repo ?? range.repo;
+  const headRepo = view?.repo ?? range.headRepo ?? range.repo;
   const headRef = view?.sha ?? entry?.newOid ?? range.head;
   const baseRef = entry?.oldOid ?? range.base;
 
