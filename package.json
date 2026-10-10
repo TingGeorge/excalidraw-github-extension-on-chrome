@@ -1,8 +1,8 @@
 {
   "name": "excalidraw-github-preview",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
-  "description": "Chrome extension that previews Excalidraw diagrams on GitHub \u2014 blob pages, inline, and pull request diffs.",
+  "description": "Chrome extension that previews Excalidraw diagrams on GitHub — blob pages, inline, and pull request diffs.",
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",

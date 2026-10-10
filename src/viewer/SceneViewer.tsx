@@ -20,10 +20,12 @@ import { Button, Menu, Spinner, useToast } from "./components/ui";
 import { copyPng, exportExcalidraw, exportPng, exportSvg } from "./export";
 import { loadScene, type LoadedScene } from "./scene";
 import { useEmbedInteraction } from "./useEmbed";
+import { applyView, fitElementsView, redrawAll, watchDevicePixelRatio } from "./view";
 
 /** Zoom so the whole drawing is visible; libraries (small shapes in a grid) may zoom in a little. */
-export function fitScene(api: ExcalidrawImperativeAPI, animate = false, maxZoom = 1): void {
-  api.scrollToContent(undefined, { fitToViewport: true, viewportZoomFactor: 0.9, maxZoom, animate });
+function fitScene(api: ExcalidrawImperativeAPI, maxZoom = 1): void {
+  const view = fitElementsView(api, undefined, { maxZoom });
+  if (view) applyView(api, view);
 }
 
 export function SceneViewer({
@@ -76,11 +78,11 @@ export function SceneViewer({
   // Fit once the canvas has its final size, and again on resize until the user moves the view.
   useEffect(() => {
     if (!api || !scene) return;
-    let raf = requestAnimationFrame(() => fitScene(api, false, maxZoom));
+    let raf = requestAnimationFrame(() => fitScene(api, maxZoom));
     const onResize = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        if (!userMoved.current) fitScene(api, false, maxZoom);
+        if (!userMoved.current) fitScene(api, maxZoom);
       });
     };
     window.addEventListener("resize", onResize);
@@ -89,6 +91,24 @@ export function SceneViewer({
       cancelAnimationFrame(raf);
     };
   }, [api, scene, maxZoom]);
+
+  // Page zoom or a move to another screen changes the pixel density: repaint everything.
+  useEffect(() => {
+    if (!api) return;
+    let raf = 0;
+    const stop = watchDevicePixelRatio(() => {
+      redrawAll(api);
+      // Re-align the fitted view to the new pixel grid once Excalidraw has the new size.
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (!userMoved.current) fitScene(api, maxZoom);
+      });
+    });
+    return () => {
+      stop();
+      cancelAnimationFrame(raf);
+    };
+  }, [api, maxZoom]);
 
   const run = useCallback(
     async (action: () => Promise<void> | void, success: string) => {
@@ -180,7 +200,7 @@ export function SceneViewer({
         onClick={() => {
           if (!api) return;
           userMoved.current = false;
-          fitScene(api, true, maxZoom);
+          fitScene(api, maxZoom);
         }}
       />
       {exportItems.length > 0 && <Menu label={t("export")} icon={<DownloadIcon />} items={exportItems} />}
