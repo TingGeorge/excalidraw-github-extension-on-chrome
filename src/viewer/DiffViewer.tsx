@@ -89,19 +89,23 @@ export function DiffViewer({
   const [densityEpoch, setDensityEpoch] = useState(0);
   useEffect(() => watchDevicePixelRatio(() => setDensityEpoch((n) => n + 1)), []);
 
+  // Excalidraw keys its bitmap cache on element objects: new objects after a
+  // density change, the same ones otherwise (e.g. when toggling highlights).
+  const drawn = useMemo(() => {
+    const copy = (scene: LoadedScene | null | undefined): El[] =>
+      densityEpoch === 0 ? [...(scene?.elements ?? [])] : (scene?.elements ?? []).map((el) => ({ ...el }));
+    return { base: copy(loaded?.base), head: copy(loaded?.head) };
+  }, [loaded, densityEpoch]);
+
   // Highlights only make sense when both versions exist.
   const bothSides = Boolean(loaded?.base && loaded?.head);
   const sceneElements = useMemo(() => {
     const build = (side: Side): El[] => {
-      const scene = loaded?.[side];
-      if (!scene) return [];
       const marks = highlight && bothSides && diff ? highlightElements(diff.changes, side) : [];
-      // Fresh objects each time: Excalidraw keys its bitmap cache on them.
-      return [...marks, ...scene.elements].map((el) => ({ ...el }));
+      return [...marks, ...drawn[side]];
     };
-    void densityEpoch;
     return { base: build("base"), head: build("head") };
-  }, [loaded, highlight, bothSides, diff, densityEpoch]);
+  }, [drawn, highlight, bothSides, diff]);
 
   // Re-render highlights when toggled.
   useEffect(() => {

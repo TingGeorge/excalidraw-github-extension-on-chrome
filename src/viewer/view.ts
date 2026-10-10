@@ -61,11 +61,17 @@ export function watchDevicePixelRatio(onChange: () => void): () => void {
 /**
  * Excalidraw caches each element's bitmap per element object and only redraws
  * it when the zoom changes, not when devicePixelRatio does — stale bitmaps are
- * drawn at the wrong size and resolution. New objects get new bitmaps.
+ * drawn at the wrong size and resolution. New objects get new bitmaps. Elements
+ * being drawn, resized or typed keep their identity: Excalidraw holds on to
+ * those objects and goes on updating them.
  */
 export function redrawAll(api: ExcalidrawImperativeAPI): void {
+  const st = api.getAppState();
+  const busy = new Set(
+    [st.newElement, st.multiElement, st.resizingElement, st.editingTextElement].map((el) => el?.id),
+  );
   api.updateScene({
-    elements: api.getSceneElementsIncludingDeleted().map((el) => ({ ...el })),
+    elements: api.getSceneElementsIncludingDeleted().map((el) => (busy.has(el.id) ? el : { ...el })),
     captureUpdate: CaptureUpdateAction.NEVER,
   });
 }

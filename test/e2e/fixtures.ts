@@ -41,7 +41,7 @@ export const test = base.extend<Fixtures & Options>({
       viewport: { width: 1280, height: 860 },
       locale: locale ?? "en-US",
       colorScheme: colorScheme ?? "light",
-      deviceScaleFactor: deviceScaleFactor ?? 1,
+      deviceScaleFactor: screenScale ?? deviceScaleFactor ?? 1,
       args: [
         `--disable-extensions-except=${DIST}`,
         `--load-extension=${DIST}`,

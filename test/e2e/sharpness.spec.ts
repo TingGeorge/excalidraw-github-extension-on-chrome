@@ -82,9 +82,10 @@ function offGrid(blits: Array<[number, number]>) {
 async function canvasDigest(target: Target, selector = "canvas.excalidraw__canvas.static"): Promise<string> {
   return target.evaluate((sel) => {
     const canvas = document.querySelector<HTMLCanvasElement>(sel)!;
-    const data = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
+    const { data } = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height);
+    const pixels = new Uint32Array(data.buffer);
     let h = 2166136261;
-    for (let i = 0; i < data.length; i += 1) h = Math.imul(h ^ data[i]!, 16777619);
+    for (let i = 0; i < pixels.length; i += 1) h = Math.imul(h ^ pixels[i]!, 16777619);
     return `${canvas.width}x${canvas.height}:${(h >>> 0).toString(16)}`;
   }, selector);
 }
@@ -165,35 +166,95 @@ for (const setup of [
   });
 }
 
-test("changing the page zoom repaints the inline preview at the new pixel density", async ({
-  page,
-  context,
-  extensionId,
-}) => {
-  void extensionId;
-  // At 100% the sample fits at the maximum zoom, so a page zoom does not change
-  // Excalidraw's zoom — only the pixel density.
-  const { frame } = await openInline(page, SAMPLE);
-  const zoomTab = async (factor: number) => {
-    const [worker] = context.serviceWorkers();
-    await worker!.evaluate(async (z) => {
-      const [tab] = await chrome.tabs.query({ url: "https://github.com/*" });
-      await chrome.tabs.setZoom(tab!.id!, z);
-    }, factor);
-  };
-  for (const factor of [1.25, 0.9]) {
-    await zoomTab(factor);
-    await expect.poll(() => frame.evaluate(() => devicePixelRatio)).toBeCloseTo(factor, 2);
-    await page.waitForTimeout(600);
-    const size = await frame.evaluate(() => {
-      const c = document.querySelector<HTMLCanvasElement>("canvas.excalidraw__canvas.static")!;
-      return { backing: c.width, css: c.getBoundingClientRect().width * devicePixelRatio };
+/** The static canvas's backing store and the device pixels its box really covers. */
+async function canvasPixels(frame: Frame) {
+  return frame.evaluate(
+    () =>
+      new Promise<{ backing: [number, number]; box: [number, number] }>((resolve) => {
+        const canvas = document.querySelector<HTMLCanvasElement>("canvas.excalidraw__canvas.static")!;
+        const observer = new ResizeObserver(([entry]) => {
+          observer.disconnect();
+          const size = entry!.devicePixelContentBoxSize[0]!;
+          resolve({ backing: [canvas.width, canvas.height], box: [size.inlineSize, size.blockSize] });
+        });
+        observer.observe(canvas, { box: "device-pixel-content-box" });
+      }),
+  );
+}
+
+for (const setup of [
+  { name: "standard display", screenScale: 1 },
+  { name: "125% display", screenScale: 1.25 },
+]) {
+  test.describe(setup.name, () => {
+    test.use({ screenScale: setup.screenScale });
+
+    test("page zoom keeps the inline preview at the screen's full resolution", async ({
+      page,
+      context,
+      extensionId,
+    }) => {
+      void extensionId;
+      // At 100% the sample fits at the maximum zoom, so a page zoom does not change
+      // Excalidraw's zoom — only the pixel density.
+      const { frame } = await openInline(page, SAMPLE);
+      const zoomTab = async (factor: number) => {
+        const [worker] = context.serviceWorkers();
+        await worker!.evaluate(async (z) => {
+          const [tab] = await chrome.tabs.query({ url: "https://github.com/*" });
+          await chrome.tabs.setZoom(tab!.id!, z);
+        }, factor);
+      };
+      for (const factor of [1, 1.25, 0.9, 1.1, 0.67]) {
+        await zoomTab(factor);
+        await expect
+          .poll(() => frame.evaluate(() => devicePixelRatio))
+          .toBeCloseTo(factor * setup.screenScale, 2);
+        await page.waitForTimeout(600);
+        // One canvas pixel per device pixel — otherwise the browser rescales the drawing.
+        const { backing, box } = await canvasPixels(frame);
+        expect(backing, `page zoom ${factor}`).toEqual(box);
+        // Bitmaps rendered for the new density: identical to a repaint from scratch.
+        const shown = await canvasDigest(frame);
+        await fullRepaint(frame);
+        expect(await canvasDigest(frame), `page zoom ${factor}`).toBe(shown);
+      }
     });
-    expect(Math.abs(size.backing - size.css)).toBeLessThanOrEqual(1);
-    const shown = await canvasDigest(frame);
-    await fullRepaint(frame);
-    expect(await canvasDigest(frame), `page zoom ${factor}`).toBe(shown);
-  }
+  });
+}
+
+test("a page zoom while drawing in edit mode keeps the whole pen stroke", async ({ page, extensionId }) => {
+  await page.goto(`chrome-extension://${extensionId}/viewer.html`);
+  await page.locator('input[type="file"]').setInputFiles(join(ROOT, "samples/how-it-works.excalidraw"));
+  await page.getByRole("button", { name: "Edit" }).click();
+  await page.keyboard.press("p");
+  await expect(page.locator('[data-testid="toolbar-freedraw"]')).toBeChecked();
+  const box = (await page.locator("canvas.interactive").boundingBox())!;
+  const y = box.y + box.height - 150;
+  await page.mouse.move(box.x + 300, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 450, y + 40, { steps: 15 });
+  await page.evaluate(async () => {
+    const tab = await chrome.tabs.getCurrent();
+    await chrome.tabs.setZoom(tab!.id!, 1.25);
+  });
+  await expect.poll(() => page.evaluate(() => devicePixelRatio)).toBeCloseTo(1.25, 2);
+  await page.waitForTimeout(300);
+  await page.mouse.move(box.x + 600, y, { steps: 15 });
+  await page.mouse.up();
+
+  await page.getByRole("button", { name: "Export" }).click();
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("menuitem", { name: "Download .excalidraw" }).click(),
+  ]);
+  const saved = JSON.parse(readFileSync((await download.path())!, "utf8")) as {
+    elements: Array<{ type: string; points?: number[][] }>;
+  };
+  const strokes = saved.elements.filter((el) => el.type === "freedraw");
+  expect(strokes).toHaveLength(1);
+  // Both halves of the stroke, before and after the zoom, made it into the drawing.
+  expect(strokes[0]!.points!.length).toBeGreaterThanOrEqual(25);
 });
 
 test("diff viewer draws both panes on whole device pixels after fit, zoom and jumping to a change", async ({

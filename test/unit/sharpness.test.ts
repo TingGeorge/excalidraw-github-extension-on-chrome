@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fitView, snapView, zoomView, type View } from "../../src/shared/viewport";
-import { snapTranslation, type Transform2D } from "../../src/viewer/pixel-snap";
+import { deviceExtent, snapTranslation, type Transform2D } from "../../src/viewer/pixel-snap";
 
 const identity: Transform2D = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
 const device = (t: Transform2D, x: number, y: number) => [t.a * x + t.c * y + t.e, t.b * x + t.d * y + t.f];
@@ -38,6 +38,40 @@ describe("snapTranslation", () => {
     const c = Math.cos(0.3);
     const s = Math.sin(0.3);
     expect(snapTranslation({ a: c, b: s, c: -s, d: c, e: 10.5, f: 3.5 }, 1, 1)).toBeNull();
+  });
+});
+
+describe("snapTranslation with nearly right angles", () => {
+  it("snaps elements Excalidraw draws unsmoothed, e.g. angle 1.5708 or a hair off zero", () => {
+    for (const angle of [1.5708, 3e-5, Math.PI - 2e-5]) {
+      const t = {
+        a: Math.cos(angle),
+        b: Math.sin(angle),
+        c: -Math.sin(angle),
+        d: Math.cos(angle),
+        e: 10.3,
+        f: 20.6,
+      };
+      const snapped = snapTranslation(t, 5.25, 7.75)!;
+      expect(snapped, String(angle)).not.toBeNull();
+      const [x, y] = device({ ...t, ...snapped }, 5.25, 7.75);
+      expect(isWhole(x!) && isWhole(y!)).toBe(true);
+    }
+  });
+});
+
+describe("deviceExtent", () => {
+  it("uses the device pixels the box covers instead of truncating", () => {
+    // 1404.44 CSS px at 90% page zoom: the box covers 1264 device pixels, but
+    // `1404.44 * 0.9` is 1263.996, which the canvas would truncate to 1263.
+    expect(deviceExtent(1404.44 * 0.9, 0, 1404.44, 0.9)).toBe(1264);
+    // A box starting at a fractional device position: edges are snapped separately.
+    expect(deviceExtent(549 * 1.1, 41, 41 + 549, 1.1)).toBe(Math.round(590 * 1.1) - Math.round(41 * 1.1));
+  });
+
+  it("falls back to rounding when the measured box does not match the request", () => {
+    expect(deviceExtent(1000.4, 0, 0, 2)).toBe(1000);
+    expect(deviceExtent(1000.6, 0, 300, 2)).toBe(1001);
   });
 });
 
