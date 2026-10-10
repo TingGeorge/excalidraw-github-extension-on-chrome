@@ -21,19 +21,40 @@ interface Fixtures {
   page: Page;
 }
 
-export const test = base.extend<Fixtures>({
-  context: async ({ locale, colorScheme, deviceScaleFactor }, use) => {
+interface Options {
+  /**
+   * Real device pixel ratio for every frame. Unlike Playwright's emulated
+   * `deviceScaleFactor`, it also applies to the out-of-process extension iframe.
+   */
+  screenScale: number | undefined;
+  /** Hardware-accelerated canvas and compositing (via SwiftShader), as in desktop Chrome. */
+  gpu: boolean;
+}
+
+export const test = base.extend<Fixtures & Options>({
+  screenScale: [undefined, { option: true }],
+  gpu: [false, { option: true }],
+  context: async ({ locale, colorScheme, deviceScaleFactor, screenScale, gpu }, use) => {
     const context = await chromium.launchPersistentContext("", {
       channel: "chromium",
       headless: !process.env.HEADED,
       viewport: { width: 1280, height: 860 },
       locale: locale ?? "en-US",
       colorScheme: colorScheme ?? "light",
-      deviceScaleFactor: deviceScaleFactor ?? 1,
+      deviceScaleFactor: screenScale ?? deviceScaleFactor ?? 1,
       args: [
         `--disable-extensions-except=${DIST}`,
         `--load-extension=${DIST}`,
         `--lang=${locale ?? "en-US"}`,
+        ...(screenScale ? [`--force-device-scale-factor=${screenScale}`] : []),
+        ...(gpu
+          ? [
+              "--use-angle=swiftshader",
+              "--enable-unsafe-swiftshader",
+              "--ignore-gpu-blocklist",
+              "--enable-gpu-rasterization",
+            ]
+          : []),
       ],
     });
     // Never talk to the real GitHub from tests; unrouted requests fail fast.

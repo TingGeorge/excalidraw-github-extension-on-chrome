@@ -6,8 +6,10 @@ import { createRoot } from "react-dom/client";
 import { locale } from "../shared/i18n";
 import { App } from "./App";
 import { readParams } from "./params";
+import { installPixelSnapping } from "./pixel-snap";
 import { preventFocusScroll } from "./useEmbed";
 
+installPixelSnapping();
 if (readParams().embed) preventFocusScroll();
 document.documentElement.lang = locale;
 

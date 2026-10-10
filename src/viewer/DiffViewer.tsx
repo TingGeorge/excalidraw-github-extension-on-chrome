@@ -22,6 +22,8 @@ import { Button, Spinner } from "./components/ui";
 import { CHANGE_COLORS, highlightElements } from "./highlights";
 import { loadScene, type LoadedScene } from "./scene";
 import { useEmbedInteraction } from "./useEmbed";
+import { zoomView } from "../shared/viewport";
+import { applyView, currentView, fitElementsView, watchDevicePixelRatio } from "./view";
 
 type Side = "base" | "head";
 type El = ExcalidrawElement;
@@ -83,17 +85,27 @@ export function DiffViewer({
     return diffScenes<El>(loaded.base?.elements ?? [], loaded.head?.elements ?? []);
   }, [loaded]);
 
+  /** Bumped when devicePixelRatio changes, to hand Excalidraw new element objects (see redrawAll). */
+  const [densityEpoch, setDensityEpoch] = useState(0);
+  useEffect(() => watchDevicePixelRatio(() => setDensityEpoch((n) => n + 1)), []);
+
+  // Excalidraw keys its bitmap cache on element objects: new objects after a
+  // density change, the same ones otherwise (e.g. when toggling highlights).
+  const drawn = useMemo(() => {
+    const copy = (scene: LoadedScene | null | undefined): El[] =>
+      densityEpoch === 0 ? [...(scene?.elements ?? [])] : (scene?.elements ?? []).map((el) => ({ ...el }));
+    return { base: copy(loaded?.base), head: copy(loaded?.head) };
+  }, [loaded, densityEpoch]);
+
   // Highlights only make sense when both versions exist.
   const bothSides = Boolean(loaded?.base && loaded?.head);
   const sceneElements = useMemo(() => {
     const build = (side: Side): El[] => {
-      const scene = loaded?.[side];
-      if (!scene) return [];
       const marks = highlight && bothSides && diff ? highlightElements(diff.changes, side) : [];
-      return [...marks, ...scene.elements];
+      return [...marks, ...drawn[side]];
     };
     return { base: build("base"), head: build("head") };
-  }, [loaded, highlight, bothSides, diff]);
+  }, [drawn, highlight, bothSides, diff]);
 
   // Re-render highlights when toggled.
   useEffect(() => {
@@ -119,23 +131,17 @@ export function DiffViewer({
     userMoved.current = true;
   };
 
-  const fitBoth = useCallback(
-    (animate = false) => {
-      if (allElements.length === 0) return;
-      // Both panes get the same target; no mirroring while they move there.
-      driver.current = null;
-      userMoved.current = false;
-      for (const side of ["base", "head"] as const) {
-        apis[side]?.scrollToContent(allElements, {
-          fitToViewport: true,
-          viewportZoomFactor: 0.9,
-          maxZoom: 1,
-          animate,
-        });
-      }
-    },
-    [allElements, apis],
-  );
+  const fitBoth = useCallback(() => {
+    if (allElements.length === 0) return;
+    // Both panes get the same target; no mirroring while they move there.
+    driver.current = null;
+    userMoved.current = false;
+    for (const side of ["base", "head"] as const) {
+      const api = apis[side];
+      const view = api && fitElementsView(api, allElements, { maxZoom: 1 });
+      if (api && view) applyView(api, view);
+    }
+  }, [allElements, apis]);
 
   // Initial fit once both canvases exist.
   useEffect(() => {
@@ -146,7 +152,7 @@ export function DiffViewer({
     return () => cancelAnimationFrame(raf);
   }, [apis, loaded, fitBoth]);
 
-  // Refit on window resize until the user has moved the view themselves.
+  // Refit on window resize (and density change) until the user has moved the view themselves.
   useEffect(() => {
     let raf = 0;
     const onResize = () => {
@@ -156,8 +162,10 @@ export function DiffViewer({
       });
     };
     window.addEventListener("resize", onResize);
+    const stop = watchDevicePixelRatio(onResize);
     return () => {
       window.removeEventListener("resize", onResize);
+      stop();
       cancelAnimationFrame(raf);
     };
   }, [fitBoth]);
@@ -169,19 +177,8 @@ export function DiffViewer({
     for (const side of ["base", "head"] as const) {
       const api = apis[side];
       if (!api) continue;
-      const st = api.getAppState();
-      const z = st.zoom.value;
-      const next = Math.min(30, Math.max(0.1, factor === null ? 1 : z * factor));
-      const cx = st.width / 2;
-      const cy = st.height / 2;
-      api.updateScene({
-        appState: {
-          zoom: { value: next } as never,
-          scrollX: st.scrollX + cx / next - cx / z,
-          scrollY: st.scrollY + cy / next - cy / z,
-        },
-        captureUpdate: CaptureUpdateAction.NEVER,
-      });
+      const { width, height } = api.getAppState();
+      applyView(api, zoomView(currentView(api), { width, height }, factor, window.devicePixelRatio));
     }
   };
 
@@ -216,7 +213,8 @@ export function DiffViewer({
     const api = apis[side];
     if (!api || !el) return;
     touch(side);
-    api.scrollToContent(el, { fitToViewport: true, viewportZoomFactor: 0.5, maxZoom: 2, animate: true });
+    const view = fitElementsView(api, [el], { fill: 0.5, maxZoom: 2 });
+    if (view) applyView(api, view);
   };
 
   const counts = diff && (
@@ -283,7 +281,7 @@ export function DiffViewer({
         />
         <Button showLabel={false} icon={<PlusIcon />} label={t("zoomIn")} onClick={() => zoomBoth(1.2)} />
       </div>
-      <Button showLabel={false} icon={<FitIcon />} label={t("fitToContent")} onClick={() => fitBoth(true)} />
+      <Button showLabel={false} icon={<FitIcon />} label={t("fitToContent")} onClick={() => fitBoth()} />
       <Button
         variant="invisible"
         showLabel={false}
